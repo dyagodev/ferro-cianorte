@@ -1,0 +1,107 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Produto;
+use App\Models\ProdutoEstoque;
+use Illuminate\Http\Request;
+
+class ProdutoController extends Controller
+{
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        $lojaId = $user->isAdmin()
+            ? $request->integer('loja_id') ?: null
+            : $user->loja_id;
+
+        $query = Produto::query()->where('ativo', true);
+
+        if ($busca = $request->string('q')->toString()) {
+            $query->where(function ($q) use ($busca) {
+                $q->where('codigo_barras', $busca)
+                    ->orWhere('descricao', 'like', "%{$busca}%");
+            });
+        }
+
+        $produtos = $query->orderBy('descricao')->get();
+
+        if ($lojaId) {
+            $produtos->loadMissing(['estoques' => fn ($q) => $q->where('loja_id', $lojaId)]);
+            $produtos->each(function (Produto $produto) use ($lojaId) {
+                $produto->setAttribute('quantidade_estoque', $produto->estoqueNaLoja($lojaId));
+            });
+        } elseif ($user->isAdmin()) {
+            // Admin olhando todas as lojas: traz o estoque de cada loja pra tela
+            // de gestão de produtos conseguir mostrar a quantidade real por loja.
+            $produtos->loadMissing('estoques');
+        }
+
+        return $produtos;
+    }
+
+    public function store(Request $request)
+    {
+        $data = $this->validated($request);
+
+        return response()->json(Produto::create($data), 201);
+    }
+
+    public function show(Produto $produto)
+    {
+        return $produto->load('estoques.loja', 'fornecedor');
+    }
+
+    public function update(Request $request, Produto $produto)
+    {
+        $data = $this->validated($request, $produto->id);
+        $produto->update($data);
+
+        return $produto;
+    }
+
+    public function destroy(Produto $produto)
+    {
+        $produto->update(['ativo' => false]);
+
+        return response()->json(null, 204);
+    }
+
+    /**
+     * Ajusta (define) a quantidade em estoque de um produto numa loja.
+     */
+    public function definirEstoque(Request $request, Produto $produto)
+    {
+        $data = $request->validate([
+            'loja_id' => ['required', 'exists:lojas,id'],
+            'quantidade' => ['required', 'integer'],
+        ]);
+
+        $estoque = ProdutoEstoque::updateOrCreate(
+            ['produto_id' => $produto->id, 'loja_id' => $data['loja_id']],
+            ['quantidade' => $data['quantidade']],
+        );
+
+        return $estoque;
+    }
+
+    private function validated(Request $request, ?int $ignoreId = null): array
+    {
+        return $request->validate([
+            'codigo_barras' => ['nullable', 'string', 'max:255', 'unique:produtos,codigo_barras,'.($ignoreId ?? 'NULL').',id'],
+            'descricao' => ['required', 'string', 'max:255'],
+            'unidade' => ['nullable', 'string', 'max:10'],
+            'tipo' => ['nullable', 'string', 'max:50'],
+            'grupo' => ['nullable', 'string', 'max:255'],
+            'subgrupo' => ['nullable', 'string', 'max:255'],
+            'marca' => ['nullable', 'string', 'max:255'],
+            'fornecedor_id' => ['nullable', 'exists:fornecedores,id'],
+            'preco_custo' => ['nullable', 'numeric', 'min:0'],
+            'margem_percentual' => ['nullable', 'numeric', 'min:0'],
+            'preco_venda' => ['nullable', 'numeric', 'min:0'],
+            'estoque_minimo' => ['nullable', 'integer', 'min:0'],
+            'ativo' => ['boolean'],
+        ]);
+    }
+}

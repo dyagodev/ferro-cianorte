@@ -91,6 +91,16 @@ class VendaController extends Controller
                 'feita_offline' => $feitaOffline,
             ]);
 
+            // Vendas que vêm de fora (sync-agent do Link Pro) informam a data
+            // real em que a venda aconteceu — sem isso, o created_at ficaria
+            // com o momento da sincronização, não da venda, e quebraria
+            // relatório por período/fechamento de caixa.
+            if (! empty($data['data_hora'])) {
+                $venda->created_at = $data['data_hora'];
+                $venda->updated_at = $data['data_hora'];
+                $venda->save();
+            }
+
             // O preço original vem do cadastro do produto (fonte da verdade), não do
             // que o cliente mandar, para auditar corretamente alterações de preço no caixa.
             $produtos = Produto::whereIn('id', collect($data['itens'])->pluck('produto_id'))
@@ -148,6 +158,7 @@ class VendaController extends Controller
             'uuid' => ['nullable', 'uuid'],
             'loja_id' => [$user && ! $user->isAdmin() ? 'nullable' : 'required', 'exists:lojas,id'],
             'cliente_id' => ['nullable', 'exists:clientes,id'],
+            'data_hora' => ['nullable', 'date'],
             'desconto' => ['nullable', 'numeric', 'min:0'],
             'itens' => ['required', 'array', 'min:1'],
             'itens.*.produto_id' => ['required', 'exists:produtos,id'],

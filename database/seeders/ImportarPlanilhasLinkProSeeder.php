@@ -105,21 +105,32 @@ class ImportarPlanilhasLinkProSeeder extends Seeder
         $total = 0;
 
         foreach ($linhas as $linha) {
-            [, $codigoBarras, $descricao, $unidade, $marca, $estoque, $estoqueMinimo, $precoCusto, , , $precoVenda] = $linha;
+            [$codigoInterno, $codigoBarras, $descricao, $unidade, $marca, $estoque, $estoqueMinimo, $precoCusto, , , $precoVenda] = $linha;
 
             $descricao = trim((string) $descricao);
             if ($descricao === '') {
                 continue;
             }
 
+            $codigoInterno = trim((string) $codigoInterno) ?: null;
             $codigoBarras = trim((string) $codigoBarras) ?: null;
             $precoCustoNum = $this->parseDecimalBr($precoCusto);
             $precoVendaNum = $this->parseDecimalBr($precoVenda);
             $margem = $precoCustoNum > 0 ? round((($precoVendaNum - $precoCustoNum) / $precoCustoNum) * 100, 2) : 0;
 
-            $chave = $codigoBarras ? ['codigo_barras' => $codigoBarras] : ['descricao' => $descricao];
+            // Casa primeiro pelo código de barras — é a chave que a primeira
+            // importação já usou pra criar o produto, então re-rodar (ex.:
+            // pra preencher o código interno num catálogo já importado) acha
+            // a linha certa em vez de tentar criar duplicata. Novo item sem
+            // código de barras casa pelo código interno (a etiqueta que a
+            // própria loja gera — mais confiável que o de fábrica, que muita
+            // peça solta de ferragem não tem) e por último pela descrição.
+            $chave = $codigoBarras
+                ? ['codigo_barras' => $codigoBarras]
+                : ($codigoInterno ? ['codigo_interno' => $codigoInterno] : ['descricao' => $descricao]);
 
             $produto = Produto::updateOrCreate($chave, [
+                'codigo_interno' => $codigoInterno,
                 'codigo_barras' => $codigoBarras,
                 'descricao' => $descricao,
                 'unidade' => trim((string) $unidade) ?: 'UN',

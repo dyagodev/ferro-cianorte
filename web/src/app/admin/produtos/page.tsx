@@ -23,7 +23,7 @@ export default function ProdutosPage() {
   const [ultimaPagina, setUltimaPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [descricao, setDescricao] = useState("");
-  const [codigoBarras, setCodigoBarras] = useState("");
+  const [codigoInterno, setCodigoInterno] = useState("");
   const [precoVenda, setPrecoVenda] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [edicao, setEdicao] = useState<EdicaoEstoque | null>(null);
@@ -59,12 +59,12 @@ export default function ProdutosPage() {
         method: "POST",
         body: JSON.stringify({
           descricao,
-          codigo_barras: codigoBarras || null,
+          codigo_interno: codigoInterno || null,
           preco_venda: Number(precoVenda) || 0,
         }),
       });
       setDescricao("");
-      setCodigoBarras("");
+      setCodigoInterno("");
       setPrecoVenda("");
       await carregar();
     } catch {
@@ -114,9 +114,9 @@ export default function ProdutosPage() {
           className="flex-1 rounded border border-slate-300 bg-slate-50 px-3 py-2"
         />
         <input
-          placeholder="Código de barras"
-          value={codigoBarras}
-          onChange={(e) => setCodigoBarras(e.target.value)}
+          placeholder="Código interno"
+          value={codigoInterno}
+          onChange={(e) => setCodigoInterno(e.target.value)}
           className="w-48 rounded border border-slate-300 bg-slate-50 px-3 py-2"
         />
         <input
@@ -145,7 +145,7 @@ export default function ProdutosPage() {
           <thead className="bg-slate-50 text-sm text-slate-500">
             <tr>
               <th className="px-3 py-2">Descrição</th>
-              <th className="px-3 py-2">Cód. barras</th>
+              <th className="px-3 py-2">Código Interno</th>
               <th className="px-3 py-2">Preço venda</th>
               <th className="px-3 py-2">Estoque Total</th>
               {lojas.map((loja) => (
@@ -157,7 +157,7 @@ export default function ProdutosPage() {
             {produtos.map((produto) => (
               <tr key={produto.id} className="border-t border-slate-200">
                 <td className="px-3 py-2">{produto.descricao}</td>
-                <td className="px-3 py-2 text-slate-500">{produto.codigo_barras ?? "—"}</td>
+                <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? "—"}</td>
                 <td className="px-3 py-2">R$ {Number(produto.preco_venda).toFixed(2)}</td>
                 <td className="px-3 py-2 font-semibold">{totalEstoque(produto)}</td>
                 {lojas.map((loja) => {

@@ -1,6 +1,7 @@
 export type Produto = {
   id: number;
   codigo_barras: string | null;
+  codigo_interno: string | null;
   descricao: string;
   unidade: string;
   preco_venda: string;

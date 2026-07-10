@@ -84,7 +84,7 @@ export default function ProdutoModal({
               )}
               {resultados.map((produto) => (
                 <tr key={produto.id} className="cursor-pointer border-t border-slate-200 hover:bg-slate-100" onClick={() => onSelecionar(produto)}>
-                  <td className="px-3 py-2 text-slate-500">{produto.codigo_barras ?? produto.id}</td>
+                  <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? produto.id}</td>
                   <td className="px-3 py-2">{produto.descricao}</td>
                   <td className="px-3 py-2">
                     <span className={produto.quantidade_estoque !== undefined && produto.quantidade_estoque <= 0 ? "text-red-600" : ""}>

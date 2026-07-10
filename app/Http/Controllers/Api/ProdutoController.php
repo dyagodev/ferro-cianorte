@@ -20,7 +20,10 @@ class ProdutoController extends Controller
 
         if ($busca = $request->string('q')->toString()) {
             $query->where(function ($q) use ($busca) {
-                $q->where('codigo_barras', $busca)
+                // O código interno (etiqueta própria da loja) é o identificador
+                // principal na busca — inclusive pelo leitor de código de barras,
+                // que lê essas etiquetas, não o código de barras do fabricante.
+                $q->where('codigo_interno', $busca)
                     ->orWhere('descricao', 'like', "%{$busca}%");
             });
         }
@@ -100,6 +103,7 @@ class ProdutoController extends Controller
     {
         return $request->validate([
             'codigo_barras' => ['nullable', 'string', 'max:255', 'unique:produtos,codigo_barras,'.($ignoreId ?? 'NULL').',id'],
+            'codigo_interno' => ['nullable', 'string', 'max:255', 'unique:produtos,codigo_interno,'.($ignoreId ?? 'NULL').',id'],
             'descricao' => ['required', 'string', 'max:255'],
             'unidade' => ['nullable', 'string', 'max:10'],
             'tipo' => ['nullable', 'string', 'max:50'],

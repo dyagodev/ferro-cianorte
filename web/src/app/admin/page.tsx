@@ -2,9 +2,9 @@
 
 import { AlertTriangle, CreditCard, DollarSign, RefreshCw, ReceiptText, TrendingUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
-import type { FormaPagamento } from "@/lib/types";
+import type { FormaPagamento, Loja } from "@/lib/types";
 
 const ROTULO_FORMA: Record<FormaPagamento, string> = {
   boleto: "Boleto",
@@ -31,32 +31,41 @@ type Dashboard = {
 export default function AdminHome() {
   const [dados, setDados] = useState<Dashboard | null>(null);
   const [erro, setErro] = useState(false);
+  const [lojas, setLojas] = useState<Loja[]>([]);
+  const [lojaId, setLojaId] = useState<number | null>(null);
 
   useEffect(() => {
-    const data = hoje();
+    apiFetch<Loja[]>("lojas").then(setLojas);
+  }, []);
 
-    Promise.all([
+  const carregarDados = useCallback(async (lojaFiltro: number | null) => {
+    const data = hoje();
+    const filtroLoja = lojaFiltro ? `&loja_id=${lojaFiltro}` : "";
+
+    const [vendas, fechamento, estoque, produtos] = await Promise.all([
       apiFetch<{ totais: { quantidade_vendas: number; total: number } }>(
-        `relatorios/vendas?data_inicio=${data}&data_fim=${data}`,
+        `relatorios/vendas?data_inicio=${data}&data_fim=${data}${filtroLoja}`,
       ),
       apiFetch<{ por_forma_pagamento: Dashboard["porFormaPagamento"] }>(
-        `relatorios/fechamento-caixa?data_inicio=${data}&data_fim=${data}`,
+        `relatorios/fechamento-caixa?data_inicio=${data}&data_fim=${data}${filtroLoja}`,
       ),
-      apiFetch<{ itens: unknown[] }>("relatorios/estoque-baixo"),
+      apiFetch<{ itens: unknown[] }>(`relatorios/estoque-baixo${lojaFiltro ? `?loja_id=${lojaFiltro}` : ""}`),
       apiFetch<{ produtos: Dashboard["topProdutosHoje"] }>(
-        `relatorios/produtos-mais-vendidos?data_inicio=${data}&data_fim=${data}&limit=5`,
+        `relatorios/produtos-mais-vendidos?data_inicio=${data}&data_fim=${data}&limit=5${filtroLoja}`,
       ),
-    ])
-      .then(([vendas, fechamento, estoque, produtos]) => {
-        setDados({
-          vendasHoje: vendas.totais,
-          porFormaPagamento: fechamento.por_forma_pagamento,
-          estoqueBaixoCount: estoque.itens.length,
-          topProdutosHoje: produtos.produtos,
-        });
-      })
-      .catch(() => setErro(true));
+    ]);
+
+    setDados({
+      vendasHoje: vendas.totais,
+      porFormaPagamento: fechamento.por_forma_pagamento,
+      estoqueBaixoCount: estoque.itens.length,
+      topProdutosHoje: produtos.produtos,
+    });
   }, []);
+
+  useEffect(() => {
+    carregarDados(lojaId).catch(() => setErro(true));
+  }, [carregarDados, lojaId]);
 
   if (erro) return <p className="text-red-600">Não foi possível carregar o painel.</p>;
   if (!dados) return <p className="text-slate-500">Carregando painel...</p>;
@@ -65,7 +74,21 @@ export default function AdminHome() {
     <div className="text-slate-900">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Painel do dia</h2>
-        <BotaoSincronizarDados />
+        <div className="flex items-center gap-2">
+          <select
+            value={lojaId ?? ""}
+            onChange={(e) => setLojaId(e.target.value ? Number(e.target.value) : null)}
+            className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm"
+          >
+            <option value="">Todas as lojas</option>
+            {lojas.map((loja) => (
+              <option key={loja.id} value={loja.id}>
+                {loja.nome}
+              </option>
+            ))}
+          </select>
+          <BotaoSincronizarDados onSincronizar={() => carregarDados(lojaId)} />
+        </div>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -130,18 +153,17 @@ export default function AdminHome() {
   );
 }
 
-// TODO: placeholder visual — ainda não chama o backend de verdade. Quando o
-// processamento do staging (arquivos do sync-agent do Link Pro) estiver
-// pronto, trocar por uma chamada real (ex: POST /sync-agent/processar) que
-// dispara o mesmo processamento que já roda sozinho de tempos em tempos.
-function BotaoSincronizarDados() {
+function BotaoSincronizarDados({ onSincronizar }: { onSincronizar: () => Promise<void> }) {
   const [estado, setEstado] = useState<"ocioso" | "sincronizando" | "concluido">("ocioso");
 
   async function sincronizar() {
     setEstado("sincronizando");
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setEstado("concluido");
-    setTimeout(() => setEstado("ocioso"), 2500);
+    try {
+      await onSincronizar();
+      setEstado("concluido");
+    } finally {
+      setTimeout(() => setEstado("ocioso"), 2500);
+    }
   }
 
   return (

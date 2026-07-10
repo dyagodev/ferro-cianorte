@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Package, Pencil, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Package, Pencil, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
+import { CampoDinheiro } from "@/components/CampoDinheiro";
 import type { Loja, Produto } from "@/lib/types";
 
 type EdicaoEstoque = { produtoId: number; lojaId: number };
@@ -22,17 +23,28 @@ export default function ProdutosPage() {
   const [pagina, setPagina] = useState(1);
   const [ultimaPagina, setUltimaPagina] = useState(1);
   const [total, setTotal] = useState(0);
+  const [busca, setBusca] = useState("");
+
   const [descricao, setDescricao] = useState("");
   const [codigoInterno, setCodigoInterno] = useState("");
-  const [precoVenda, setPrecoVenda] = useState("");
+  const [marca, setMarca] = useState("");
+  const [unidade, setUnidade] = useState("UN");
+  const [precoCusto, setPrecoCusto] = useState(0);
+  const [margemPercentual, setMargemPercentual] = useState("");
+  const [precoVenda, setPrecoVenda] = useState(0);
+  const [estoqueMinimo, setEstoqueMinimo] = useState("");
+
   const [erro, setErro] = useState<string | null>(null);
   const [edicao, setEdicao] = useState<EdicaoEstoque | null>(null);
   const [valorEdicao, setValorEdicao] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  async function carregar(paginaAlvo = pagina) {
+  async function carregar(paginaAlvo = pagina, buscaAlvo = busca) {
+    const query = new URLSearchParams({ page: String(paginaAlvo), per_page: String(POR_PAGINA) });
+    if (buscaAlvo.trim()) query.set("q", buscaAlvo.trim());
+
     const [produtosResp, lojasResp] = await Promise.all([
-      apiFetch<PaginaProdutos>(`produtos?page=${paginaAlvo}&per_page=${POR_PAGINA}`),
+      apiFetch<PaginaProdutos>(`produtos?${query.toString()}`),
       apiFetch<Loja[]>("lojas"),
     ]);
     setProdutos(produtosResp.data);
@@ -47,6 +59,14 @@ export default function ProdutosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Busca com debounce: sempre volta pra página 1 (um resultado filtrado não
+  // faz sentido continuar na página 5 de antes).
+  useEffect(() => {
+    const timer = setTimeout(() => carregar(1, busca), 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca]);
+
   function totalEstoque(produto: Produto): number {
     return produto.estoques?.reduce((soma, estoque) => soma + estoque.quantidade, 0) ?? 0;
   }
@@ -60,12 +80,22 @@ export default function ProdutosPage() {
         body: JSON.stringify({
           descricao,
           codigo_interno: codigoInterno || null,
-          preco_venda: Number(precoVenda) || 0,
+          marca: marca || null,
+          unidade: unidade || "UN",
+          preco_custo: precoCusto,
+          margem_percentual: Number(margemPercentual) || 0,
+          preco_venda: precoVenda,
+          estoque_minimo: Number(estoqueMinimo) || 0,
         }),
       });
       setDescricao("");
       setCodigoInterno("");
-      setPrecoVenda("");
+      setMarca("");
+      setUnidade("UN");
+      setPrecoCusto(0);
+      setMargemPercentual("");
+      setPrecoVenda(0);
+      setEstoqueMinimo("");
       await carregar();
     } catch {
       setErro("Não foi possível criar o produto.");
@@ -105,31 +135,77 @@ export default function ProdutosPage() {
         Produtos
       </h2>
 
-      <form onSubmit={criar} className="mb-6 flex flex-wrap gap-2">
-        <input
-          placeholder="Descrição"
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-          required
-          className="flex-1 rounded border border-slate-300 bg-slate-50 px-3 py-2"
-        />
-        <input
-          placeholder="Código interno"
-          value={codigoInterno}
-          onChange={(e) => setCodigoInterno(e.target.value)}
-          className="w-48 rounded border border-slate-300 bg-slate-50 px-3 py-2"
-        />
-        <input
-          placeholder="Preço venda"
-          type="number"
-          step="0.01"
-          value={precoVenda}
-          onChange={(e) => setPrecoVenda(e.target.value)}
-          className="w-32 rounded border border-slate-300 bg-slate-50 px-3 py-2"
-        />
+      <form onSubmit={criar} className="mb-6 rounded border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <input
+            placeholder="Descrição"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            required
+            className="rounded border border-slate-300 bg-white px-3 py-2 lg:col-span-2"
+          />
+          <input
+            placeholder="Código interno"
+            value={codigoInterno}
+            onChange={(e) => setCodigoInterno(e.target.value)}
+            className="rounded border border-slate-300 bg-white px-3 py-2"
+          />
+          <input
+            placeholder="Marca"
+            value={marca}
+            onChange={(e) => setMarca(e.target.value)}
+            className="rounded border border-slate-300 bg-white px-3 py-2"
+          />
+          <label className="flex flex-col gap-1 text-sm text-slate-500">
+            Unidade
+            <input
+              placeholder="UN"
+              value={unidade}
+              onChange={(e) => setUnidade(e.target.value)}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-slate-500">
+            Preço custo
+            <CampoDinheiro
+              value={precoCusto}
+              onChange={setPrecoCusto}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-slate-500">
+            Margem %
+            <input
+              type="number"
+              step="0.01"
+              placeholder="0"
+              value={margemPercentual}
+              onChange={(e) => setMargemPercentual(e.target.value)}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-slate-500">
+            Preço venda
+            <CampoDinheiro
+              value={precoVenda}
+              onChange={setPrecoVenda}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-slate-500">
+            Estoque mínimo
+            <input
+              type="number"
+              placeholder="0"
+              value={estoqueMinimo}
+              onChange={(e) => setEstoqueMinimo(e.target.value)}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
+            />
+          </label>
+        </div>
         <button className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
           <Package className="h-4 w-4" />
-          Adicionar
+          Adicionar produto
         </button>
       </form>
 
@@ -139,6 +215,16 @@ export default function ProdutosPage() {
           {erro}
         </p>
       )}
+
+      <div className="relative mb-3 max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por descrição ou código interno..."
+          className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-3 text-slate-900 outline-none focus:border-blue-500"
+        />
+      </div>
 
       <div className="overflow-auto rounded border border-slate-200">
         <table className="w-full text-left">
@@ -154,6 +240,13 @@ export default function ProdutosPage() {
             </tr>
           </thead>
           <tbody>
+            {produtos.length === 0 && (
+              <tr>
+                <td colSpan={4 + lojas.length} className="px-3 py-8 text-center text-slate-500">
+                  Nenhum produto encontrado{busca ? ` para "${busca}"` : ""}.
+                </td>
+              </tr>
+            )}
             {produtos.map((produto) => (
               <tr key={produto.id} className="border-t border-slate-200">
                 <td className="px-3 py-2">{produto.descricao}</td>

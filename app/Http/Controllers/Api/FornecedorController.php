@@ -8,9 +8,18 @@ use Illuminate\Http\Request;
 
 class FornecedorController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return Fornecedor::orderBy('nome')->get();
+        $query = Fornecedor::query()->orderBy('nome');
+
+        if ($busca = $request->string('q')->toString()) {
+            $query->where(function ($q) use ($busca) {
+                $q->where('nome', 'like', "%{$busca}%")
+                    ->orWhere('cnpj', 'like', "%{$busca}%");
+            });
+        }
+
+        return $query->get();
     }
 
     public function store(Request $request)

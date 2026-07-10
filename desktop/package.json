@@ -35,7 +35,10 @@
       "category": "public.app-category.business"
     },
     "win": {
-      "target": "nsis"
+      "target": ["nsis", "portable"]
+    },
+    "portable": {
+      "artifactName": "${productName} Portable ${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,

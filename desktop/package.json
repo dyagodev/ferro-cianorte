@@ -1,0 +1,47 @@
+{
+  "name": "ferro-cianorte-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ferro Cianorte — app desktop (bolha flutuante) para Windows e Mac",
+  "author": "DM Tecnologia",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:web": "cd ../web && npm run build",
+    "prepare:web": "node scripts/prepare-web.js",
+    "dist:mac": "npm run build:web && npm run prepare:web && electron-builder --mac",
+    "dist:win": "npm run build:web && npm run prepare:web && electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0"
+  },
+  "build": {
+    "appId": "com.dmtecnologia.ferrocianorte",
+    "productName": "Ferro Cianorte",
+    "directories": {
+      "output": "release"
+    },
+    "files": ["src/**/*", "assets/**/*"],
+    "icon": "assets/icon.png",
+    "extraResources": [
+      {
+        "from": "web-standalone",
+        "to": "web-standalone"
+      }
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

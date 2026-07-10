@@ -3,11 +3,13 @@
 import {
   AlertCircle,
   Banknote,
+  CalendarClock,
   CheckCircle2,
   CircleDollarSign,
   CreditCard,
   FileText,
   HandCoins,
+  MoreHorizontal,
   QrCode,
   UserRound,
   type LucideIcon,
@@ -25,6 +27,8 @@ const ICONES_FORMA_PAGAMENTO: Record<FormaPagamento, LucideIcon> = {
   cheque: HandCoins,
   crediario: HandCoins,
   pix: QrCode,
+  a_prazo: CalendarClock,
+  outros: MoreHorizontal,
 };
 
 export default function PagamentoModal({
@@ -92,7 +96,7 @@ export default function PagamentoModal({
             <UserRound className="h-3.5 w-3.5" />
             F10 - Cliente: {clienteNome}
           </span>
-          <span>F12 - Opções</span>
+          <span>F9 - Opções</span>
         </div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-slate-900">Finalizar Caixa</h2>

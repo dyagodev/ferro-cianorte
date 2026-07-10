@@ -22,9 +22,17 @@ export type Loja = {
   ativo: boolean;
 };
 
-export type FormaPagamento = "boleto" | "cartao" | "dinheiro" | "cheque" | "crediario" | "pix";
+export type FormaPagamento =
+  | "boleto"
+  | "cartao"
+  | "dinheiro"
+  | "cheque"
+  | "crediario"
+  | "pix"
+  | "outros"
+  | "a_prazo";
 
-// Ordem e teclas idênticas à tela de referência: B-Boleto C-Cartão D-Dinheiro H-Cheque N-Crediário P-Pix
+// Ordem e teclas idênticas à tela de referência: B-Boleto C-Cartão D-Dinheiro H-Cheque N-Crediário P-Pix A-A Prazo O-Outros
 export const FORMAS_PAGAMENTO: { valor: FormaPagamento; rotulo: string; tecla: string }[] = [
   { valor: "boleto", rotulo: "Boleto", tecla: "B" },
   { valor: "cartao", rotulo: "Cartão", tecla: "C" },
@@ -32,4 +40,6 @@ export const FORMAS_PAGAMENTO: { valor: FormaPagamento; rotulo: string; tecla: s
   { valor: "cheque", rotulo: "Cheque", tecla: "H" },
   { valor: "crediario", rotulo: "Crediário", tecla: "N" },
   { valor: "pix", rotulo: "Pix", tecla: "P" },
+  { valor: "a_prazo", rotulo: "A Prazo", tecla: "A" },
+  { valor: "outros", rotulo: "Outros", tecla: "O" },
 ];

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CaixaController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\EntregadorController;
 use App\Http\Controllers\Api\FornecedorController;
@@ -27,6 +28,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/vendas', [VendaController::class, 'store']);
     Route::post('/vendas/sync', [VendaController::class, 'sync']);
     Route::get('/vendas', [VendaController::class, 'index']);
+
+    // Sangria e fechamento de caixa: acessível a admin e vendedor, escopado
+    // à loja de cada um (admin informa a loja, vendedor usa a própria).
+    Route::post('/caixa/sangrias', [CaixaController::class, 'sangria']);
+    Route::get('/caixa/fechamento', [CaixaController::class, 'fechamento']);
 
     // Administração: apenas role admin.
     Route::middleware('role:admin')->group(function () {

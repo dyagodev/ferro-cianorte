@@ -25,20 +25,30 @@ class ProdutoController extends Controller
             });
         }
 
-        $produtos = $query->orderBy('descricao')->get();
+        $query->orderBy('descricao');
+
+        // Paginação é opt-in (só quando ?page= é enviado): a busca ao vivo do
+        // PDV (com "q") e o modal F3 sempre esperam o array completo, só a
+        // tela de gestão de produtos do admin passa a pedir por página.
+        if ($request->has('page')) {
+            $paginado = $query->paginate($request->integer('per_page') ?: 30);
+            $colecao = $paginado->getCollection();
+        } else {
+            $colecao = $query->get();
+        }
 
         if ($lojaId) {
-            $produtos->loadMissing(['estoques' => fn ($q) => $q->where('loja_id', $lojaId)]);
-            $produtos->each(function (Produto $produto) use ($lojaId) {
+            $colecao->loadMissing(['estoques' => fn ($q) => $q->where('loja_id', $lojaId)]);
+            $colecao->each(function (Produto $produto) use ($lojaId) {
                 $produto->setAttribute('quantidade_estoque', $produto->estoqueNaLoja($lojaId));
             });
         } elseif ($user->isAdmin()) {
             // Admin olhando todas as lojas: traz o estoque de cada loja pra tela
             // de gestão de produtos conseguir mostrar a quantidade real por loja.
-            $produtos->loadMissing('estoques');
+            $colecao->loadMissing('estoques');
         }
 
-        return $produtos;
+        return $paginado ?? $colecao;
     }
 
     public function store(Request $request)

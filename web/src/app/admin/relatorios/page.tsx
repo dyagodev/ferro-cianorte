@@ -212,6 +212,8 @@ const ROTULO_FORMA: Record<FormaPagamento, string> = {
   cheque: "Cheque",
   crediario: "Crediário",
   pix: "Pix",
+  a_prazo: "A Prazo",
+  outros: "Outros",
 };
 
 function RelatorioFechamento({ query }: { query: string }) {

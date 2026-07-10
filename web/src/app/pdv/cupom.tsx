@@ -20,6 +20,8 @@ const ROTULO_FORMA_PAGAMENTO: Record<FormaPagamento, string> = {
   cheque: "Cheque",
   crediario: "Crediário",
   pix: "Pix",
+  a_prazo: "A Prazo",
+  outros: "Outros",
 };
 
 export default function Cupom({ venda }: { venda: VendaConcluida }) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CreditCard, DollarSign, ReceiptText, TrendingUp, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CreditCard, DollarSign, RefreshCw, ReceiptText, TrendingUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
@@ -13,6 +13,8 @@ const ROTULO_FORMA: Record<FormaPagamento, string> = {
   cheque: "Cheque",
   crediario: "Crediário",
   pix: "Pix",
+  a_prazo: "A Prazo",
+  outros: "Outros",
 };
 
 function hoje() {
@@ -61,7 +63,10 @@ export default function AdminHome() {
 
   return (
     <div className="text-slate-900">
-      <h2 className="mb-4 text-lg font-semibold">Painel do dia</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Painel do dia</h2>
+        <BotaoSincronizarDados />
+      </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <CardMetrica icone={ReceiptText} titulo="Vendas hoje" valor={String(dados.vendasHoje.quantidade_vendas)} />
@@ -122,6 +127,34 @@ export default function AdminHome() {
         </div>
       </div>
     </div>
+  );
+}
+
+// TODO: placeholder visual — ainda não chama o backend de verdade. Quando o
+// processamento do staging (arquivos do sync-agent do Link Pro) estiver
+// pronto, trocar por uma chamada real (ex: POST /sync-agent/processar) que
+// dispara o mesmo processamento que já roda sozinho de tempos em tempos.
+function BotaoSincronizarDados() {
+  const [estado, setEstado] = useState<"ocioso" | "sincronizando" | "concluido">("ocioso");
+
+  async function sincronizar() {
+    setEstado("sincronizando");
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    setEstado("concluido");
+    setTimeout(() => setEstado("ocioso"), 2500);
+  }
+
+  return (
+    <button
+      onClick={sincronizar}
+      disabled={estado === "sincronizando"}
+      className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+    >
+      <RefreshCw className={`h-4 w-4 ${estado === "sincronizando" ? "animate-spin" : ""}`} />
+      {estado === "sincronizando" && "Sincronizando..."}
+      {estado === "concluido" && "Dados sincronizados!"}
+      {estado === "ocioso" && "Sincronizar dados"}
+    </button>
   );
 }
 

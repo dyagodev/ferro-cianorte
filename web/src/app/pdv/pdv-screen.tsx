@@ -20,6 +20,7 @@ import { apiFetch } from "@/lib/apiClient";
 import type { Cliente, Loja, Produto } from "@/lib/types";
 import ClienteModal from "./cliente-modal";
 import Cupom, { type VendaConcluida } from "./cupom";
+import MenuModal from "./menu-modal";
 import PagamentoModal from "./pagamento-modal";
 import ProdutoModal from "./produto-modal";
 
@@ -50,6 +51,7 @@ export default function PdvScreen({
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
   const [modalClienteAberto, setModalClienteAberto] = useState(false);
   const [modalProdutoAberto, setModalProdutoAberto] = useState(false);
+  const [modalMenuAberto, setModalMenuAberto] = useState(false);
   const [lojas, setLojas] = useState<Loja[]>([]);
   const [lojaSelecionadaId, setLojaSelecionadaId] = useState<number | null>(null);
   const [ultimaVenda, setUltimaVenda] = useState<VendaConcluida | null>(null);
@@ -84,7 +86,7 @@ export default function PdvScreen({
 
   const total = subtotal - descontoReais;
 
-  // Atalhos idênticos ao sistema de referência: F10-Cliente, F12-Opções (finalizar), Ctrl+M-Menu.
+  // Atalhos idênticos ao sistema de referência: F10-Cliente, F9-Opções (finalizar), Ctrl+M-Menu.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "F3") {
@@ -93,18 +95,52 @@ export default function PdvScreen({
       } else if (event.key === "F10") {
         event.preventDefault();
         setModalClienteAberto(true);
-      } else if (event.key === "F12") {
+      } else if (event.key === "F9") {
         event.preventDefault();
         if (carrinho.length > 0) setModalPagamentoAberto(true);
-      } else if (event.ctrlKey && event.key.toLowerCase() === "m" && role === "admin") {
+      } else if (event.ctrlKey && event.key.toLowerCase() === "m") {
         event.preventDefault();
-        router.push("/admin");
+        setModalMenuAberto(true);
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [carrinho.length, role, router]);
+  }, [carrinho.length]);
+
+  // Busca automática (com debounce) conforme o usuário digita, tipo autocomplete —
+  // não adiciona nada sozinho, só popula a lista pra clicar. O Enter (buscarProdutos)
+  // continua existindo à parte pro leitor de código de barras, que já manda o texto
+  // completo de uma vez e espera adicionar direto quando há um único resultado exato.
+  useEffect(() => {
+    const termo = busca.trim();
+    if (termo.length < 2) {
+      setResultados([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setBuscando(true);
+      setErro(null);
+
+      const query = new URLSearchParams({ q: termo });
+      if (role === "admin" && lojaId) query.set("loja_id", String(lojaId));
+
+      apiFetch<Produto[]>(`produtos?${query.toString()}`, { signal: controller.signal })
+        .then(setResultados)
+        .catch((err) => {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          setErro("Não foi possível buscar produtos.");
+        })
+        .finally(() => setBuscando(false));
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [busca, role, lojaId]);
 
   async function buscarProdutos() {
     if (!busca.trim()) return;
@@ -276,7 +312,7 @@ export default function PdvScreen({
           </div>
           {buscando && <p className="mt-1 text-sm text-slate-500">Buscando...</p>}
 
-          {resultados.length > 1 && (
+          {resultados.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full rounded border border-slate-300 bg-slate-50 shadow-xl">
               {resultados.map((produto) => (
                 <li key={produto.id}>
@@ -426,19 +462,20 @@ export default function PdvScreen({
           </div>
           <div className="flex items-center gap-4">
             <span className="text-2xl font-semibold text-slate-900">Total: R$ {total.toFixed(2)}</span>
-            {role === "admin" && (
-              <span className="flex items-center gap-1.5">
-                <LayoutDashboard className="h-4 w-4" />
-                Ctrl+M - Menu
-              </span>
-            )}
+            <button
+              onClick={() => setModalMenuAberto(true)}
+              className="flex items-center gap-1.5 hover:text-slate-900"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Ctrl+M - Menu
+            </button>
             <button
               onClick={() => carrinho.length > 0 && setModalPagamentoAberto(true)}
               disabled={carrinho.length === 0}
               className="flex items-center gap-2 rounded bg-blue-600 px-6 py-2 text-lg font-medium text-white hover:bg-blue-500 disabled:opacity-50"
             >
               <CheckCircle2 className="h-5 w-5" />
-              F12 - Opções
+              F9 - Opções
             </button>
           </div>
         </footer>
@@ -464,6 +501,10 @@ export default function PdvScreen({
             setModalProdutoAberto(false);
           }}
         />
+      )}
+
+      {modalMenuAberto && (
+        <MenuModal role={role} lojaId={lojaId} onFechar={() => setModalMenuAberto(false)} />
       )}
 
       {modalPagamentoAberto && (

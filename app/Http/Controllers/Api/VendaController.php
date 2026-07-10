@@ -154,7 +154,7 @@ class VendaController extends Controller
             'itens.*.quantidade' => ['required', 'numeric', 'min:0.001'],
             'itens.*.preco_unitario' => ['required', 'numeric', 'min:0'],
             'pagamentos' => ['required', 'array', 'min:1'],
-            'pagamentos.*.forma_pagamento' => ['required', 'in:dinheiro,cartao,pix,boleto,cheque,crediario'],
+            'pagamentos.*.forma_pagamento' => ['required', 'in:dinheiro,cartao,pix,boleto,cheque,crediario,a_prazo,outros'],
             'pagamentos.*.valor' => ['required', 'numeric', 'min:0'],
         ]);
 

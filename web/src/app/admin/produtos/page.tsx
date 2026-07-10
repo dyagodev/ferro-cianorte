@@ -1,15 +1,27 @@
 "use client";
 
-import { AlertCircle, Check, Package, Pencil, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Package, Pencil, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import type { Loja, Produto } from "@/lib/types";
 
 type EdicaoEstoque = { produtoId: number; lojaId: number };
 
+type PaginaProdutos = {
+  data: Produto[];
+  current_page: number;
+  last_page: number;
+  total: number;
+};
+
+const POR_PAGINA = 30;
+
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [lojas, setLojas] = useState<Loja[]>([]);
+  const [pagina, setPagina] = useState(1);
+  const [ultimaPagina, setUltimaPagina] = useState(1);
+  const [total, setTotal] = useState(0);
   const [descricao, setDescricao] = useState("");
   const [codigoBarras, setCodigoBarras] = useState("");
   const [precoVenda, setPrecoVenda] = useState("");
@@ -18,18 +30,26 @@ export default function ProdutosPage() {
   const [valorEdicao, setValorEdicao] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  async function carregar() {
+  async function carregar(paginaAlvo = pagina) {
     const [produtosResp, lojasResp] = await Promise.all([
-      apiFetch<Produto[]>("produtos"),
+      apiFetch<PaginaProdutos>(`produtos?page=${paginaAlvo}&per_page=${POR_PAGINA}`),
       apiFetch<Loja[]>("lojas"),
     ]);
-    setProdutos(produtosResp);
+    setProdutos(produtosResp.data);
+    setPagina(produtosResp.current_page);
+    setUltimaPagina(produtosResp.last_page);
+    setTotal(produtosResp.total);
     setLojas(lojasResp);
   }
 
   useEffect(() => {
-    carregar();
+    carregar(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function totalEstoque(produto: Produto): number {
+    return produto.estoques?.reduce((soma, estoque) => soma + estoque.quantidade, 0) ?? 0;
+  }
 
   async function criar(event: React.FormEvent) {
     event.preventDefault();
@@ -127,6 +147,7 @@ export default function ProdutosPage() {
               <th className="px-3 py-2">Descrição</th>
               <th className="px-3 py-2">Cód. barras</th>
               <th className="px-3 py-2">Preço venda</th>
+              <th className="px-3 py-2">Estoque Total</th>
               {lojas.map((loja) => (
                 <th key={loja.id} className="px-3 py-2">Estoque {loja.nome}</th>
               ))}
@@ -138,6 +159,7 @@ export default function ProdutosPage() {
                 <td className="px-3 py-2">{produto.descricao}</td>
                 <td className="px-3 py-2 text-slate-500">{produto.codigo_barras ?? "—"}</td>
                 <td className="px-3 py-2">R$ {Number(produto.preco_venda).toFixed(2)}</td>
+                <td className="px-3 py-2 font-semibold">{totalEstoque(produto)}</td>
                 {lojas.map((loja) => {
                   const quantidade = estoqueDoProduto(produto, loja.id);
                   const editandoEsta = edicao?.produtoId === produto.id && edicao.lojaId === loja.id;
@@ -195,6 +217,30 @@ export default function ProdutosPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
+        <span>
+          Página {pagina} de {ultimaPagina} — {total} produtos
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => carregar(pagina - 1)}
+            disabled={pagina <= 1}
+            className="flex items-center gap-1 rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-100 disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Anterior
+          </button>
+          <button
+            onClick={() => carregar(pagina + 1)}
+            disabled={pagina >= ultimaPagina}
+            className="flex items-center gap-1 rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-100 disabled:opacity-40"
+          >
+            Próxima
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

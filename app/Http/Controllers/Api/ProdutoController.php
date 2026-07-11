@@ -88,7 +88,7 @@ class ProdutoController extends Controller
     {
         $data = $request->validate([
             'loja_id' => ['required', 'exists:lojas,id'],
-            'quantidade' => ['required', 'integer'],
+            'quantidade' => ['required', 'numeric'],
         ]);
 
         $estoque = ProdutoEstoque::updateOrCreate(

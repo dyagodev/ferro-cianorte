@@ -144,7 +144,8 @@ class VendaController extends Controller
 
         // Estoque pode ficar negativo propositalmente: o caixa não deve travar
         // por divergência de estoque, isso é sinalizado depois em relatório.
-        $estoque->decrement('quantidade', (int) round($quantidade));
+        // Quantidade fracionária de propósito (produto vendido por peso/metro).
+        $estoque->decrement('quantidade', $quantidade);
     }
 
     private function validatedVenda(Request $request): array

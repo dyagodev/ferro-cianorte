@@ -263,6 +263,7 @@ export default function ProdutosPage() {
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
+                            step="0.001"
                             autoFocus
                             value={valorEdicao}
                             onChange={(e) => setValorEdicao(e.target.value)}

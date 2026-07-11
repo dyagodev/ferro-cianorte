@@ -5,8 +5,8 @@ export type Produto = {
   descricao: string;
   unidade: string;
   preco_venda: string;
-  quantidade_estoque?: number;
-  estoques?: { loja_id: number; quantidade: number }[];
+  quantidade_estoque?: number | string;
+  estoques?: { loja_id: number; quantidade: number | string }[];
 };
 
 export type Cliente = {

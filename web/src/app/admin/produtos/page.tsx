@@ -68,7 +68,15 @@ export default function ProdutosPage() {
   }, [busca]);
 
   function totalEstoque(produto: Produto): number {
-    return produto.estoques?.reduce((soma, estoque) => soma + estoque.quantidade, 0) ?? 0;
+    // A API devolve quantidade como texto (ex.: "8.333") — sem o Number(),
+    // "soma + estoque.quantidade" vira concatenação de string em vez de soma.
+    return produto.estoques?.reduce((soma, estoque) => soma + Number(estoque.quantidade), 0) ?? 0;
+  }
+
+  // Só mostra casas decimais quando o valor realmente tem fração — "10.000"
+  // vira "10", mas "8.333" continua "8.333".
+  function formatarQuantidade(valor: number): string {
+    return Number.isFinite(valor) ? String(Math.round(valor * 1000) / 1000) : "0";
   }
 
   async function criar(event: React.FormEvent) {
@@ -103,7 +111,7 @@ export default function ProdutosPage() {
   }
 
   function estoqueDoProduto(produto: Produto, lojaId: number): number {
-    return produto.estoques?.find((estoque) => estoque.loja_id === lojaId)?.quantidade ?? 0;
+    return Number(produto.estoques?.find((estoque) => estoque.loja_id === lojaId)?.quantidade ?? 0);
   }
 
   function iniciarEdicao(produto: Produto, lojaId: number) {
@@ -252,7 +260,7 @@ export default function ProdutosPage() {
                 <td className="px-3 py-2">{produto.descricao}</td>
                 <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? "—"}</td>
                 <td className="px-3 py-2">R$ {Number(produto.preco_venda).toFixed(2)}</td>
-                <td className="px-3 py-2 font-semibold">{totalEstoque(produto)}</td>
+                <td className="px-3 py-2 font-semibold">{formatarQuantidade(totalEstoque(produto))}</td>
                 {lojas.map((loja) => {
                   const quantidade = estoqueDoProduto(produto, loja.id);
                   const editandoEsta = edicao?.produtoId === produto.id && edicao.lojaId === loja.id;
@@ -293,7 +301,7 @@ export default function ProdutosPage() {
                       ) : (
                         <div className="flex items-center gap-2">
                           <span className={`font-medium ${quantidade <= 0 ? "text-red-600" : "text-slate-900"}`}>
-                            {quantidade}
+                            {formatarQuantidade(quantidade)}
                           </span>
                           <button
                             onClick={() => iniciarEdicao(produto, loja.id)}

@@ -87,8 +87,8 @@ export default function ProdutoModal({
                   <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? produto.id}</td>
                   <td className="px-3 py-2">{produto.descricao}</td>
                   <td className="px-3 py-2">
-                    <span className={produto.quantidade_estoque !== undefined && produto.quantidade_estoque <= 0 ? "text-red-600" : ""}>
-                      {produto.quantidade_estoque ?? "—"}
+                    <span className={produto.quantidade_estoque !== undefined && Number(produto.quantidade_estoque) <= 0 ? "text-red-600" : ""}>
+                      {produto.quantidade_estoque !== undefined ? Number(produto.quantidade_estoque) : "—"}
                     </span>
                   </td>
                   <td className="px-3 py-2">{Number(produto.preco_venda).toFixed(2)}</td>

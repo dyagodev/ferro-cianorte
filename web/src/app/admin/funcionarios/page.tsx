@@ -3,6 +3,7 @@
 import { AlertCircle, Plus, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
+import { ModalCadastro } from "@/components/ModalCadastro";
 import type { Loja } from "@/lib/types";
 
 type Funcionario = { id: number; name: string; email: string; role: "admin" | "vendedor"; loja_id: number | null };
@@ -10,6 +11,7 @@ type Funcionario = { id: number; name: string; email: string; role: "admin" | "v
 export default function FuncionariosPage() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [lojas, setLojas] = useState<Loja[]>([]);
+  const [modalAberto, setModalAberto] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,6 +49,7 @@ export default function FuncionariosPage() {
       setName("");
       setEmail("");
       setPassword("");
+      setModalAberto(false);
       await carregar();
     } catch {
       setErro("Não foi possível criar o funcionário. Verifique os dados (e-mail único, loja obrigatória para vendedor).");
@@ -55,39 +58,22 @@ export default function FuncionariosPage() {
 
   return (
     <div className="max-w-3xl text-slate-900">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-        <UsersRound className="h-5 w-5 text-blue-600" />
-        Funcionários
-      </h2>
-
-      <form onSubmit={criar} className="mb-6 flex flex-wrap gap-2">
-        <input placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} required className="flex-1 rounded border border-slate-300 bg-slate-50 px-3 py-2" />
-        <input placeholder="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="flex-1 rounded border border-slate-300 bg-slate-50 px-3 py-2" />
-        <input placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-40 rounded border border-slate-300 bg-slate-50 px-3 py-2" />
-        <select value={role} onChange={(e) => setRole(e.target.value as "admin" | "vendedor")} className="rounded border border-slate-300 bg-slate-50 px-3 py-2">
-          <option value="vendedor">Vendedor</option>
-          <option value="admin">Admin</option>
-        </select>
-        {role === "vendedor" && (
-          <select value={lojaId} onChange={(e) => setLojaId(e.target.value)} required className="rounded border border-slate-300 bg-slate-50 px-3 py-2">
-            <option value="">Loja...</option>
-            {lojas.map((loja) => (
-              <option key={loja.id} value={loja.id}>{loja.nome}</option>
-            ))}
-          </select>
-        )}
-        <button className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <UsersRound className="h-5 w-5 text-blue-600" />
+          Funcionários
+        </h2>
+        <button
+          onClick={() => {
+            setErro(null);
+            setModalAberto(true);
+          }}
+          className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+        >
           <Plus className="h-4 w-4" />
-          Adicionar
+          Cadastrar
         </button>
-      </form>
-
-      {erro && (
-        <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">
-          <AlertCircle className="h-4 w-4" />
-          {erro}
-        </p>
-      )}
+      </div>
 
       <ul className="divide-y divide-slate-200 rounded border border-slate-200">
         {funcionarios.map((funcionario) => (
@@ -109,6 +95,92 @@ export default function FuncionariosPage() {
           </li>
         ))}
       </ul>
+
+      {modalAberto && (
+        <ModalCadastro titulo="Novo Funcionário" icone={UsersRound} onFechar={() => setModalAberto(false)}>
+          <form onSubmit={criar}>
+            <label className="mb-1 block text-sm text-slate-500">Nome</label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <label className="mb-1 block text-sm text-slate-500">E-mail</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <label className="mb-1 block text-sm text-slate-500">Senha</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <label className="mb-1 block text-sm text-slate-500">Papel</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as "admin" | "vendedor")}
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            >
+              <option value="vendedor">Vendedor</option>
+              <option value="admin">Admin</option>
+            </select>
+
+            {role === "vendedor" && (
+              <>
+                <label className="mb-1 block text-sm text-slate-500">Loja</label>
+                <select
+                  value={lojaId}
+                  onChange={(e) => setLojaId(e.target.value)}
+                  required
+                  className="mb-4 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                >
+                  <option value="">Selecione...</option>
+                  {lojas.map((loja) => (
+                    <option key={loja.id} value={loja.id}>
+                      {loja.nome}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {erro && (
+              <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                {erro}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setModalAberto(false)}
+                className="rounded border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4" />
+                Cadastrar
+              </button>
+            </div>
+          </form>
+        </ModalCadastro>
+      )}
     </div>
   );
 }

@@ -3,13 +3,16 @@
 import { AlertCircle, Plus, Search, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
+import { ModalCadastro } from "@/components/ModalCadastro";
 
 type Fornecedor = { id: number; nome: string; cnpj: string | null; contato: string | null };
 
 export default function FornecedoresPage() {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [busca, setBusca] = useState("");
+  const [modalAberto, setModalAberto] = useState(false);
   const [nome, setNome] = useState("");
+  const [cnpj, setCnpj] = useState("");
   const [contato, setContato] = useState("");
   const [erro, setErro] = useState<string | null>(null);
 
@@ -33,9 +36,14 @@ export default function FornecedoresPage() {
     event.preventDefault();
     setErro(null);
     try {
-      await apiFetch("fornecedores", { method: "POST", body: JSON.stringify({ nome, contato: contato || null }) });
+      await apiFetch("fornecedores", {
+        method: "POST",
+        body: JSON.stringify({ nome, cnpj: cnpj || null, contato: contato || null }),
+      });
       setNome("");
+      setCnpj("");
       setContato("");
+      setModalAberto(false);
       await carregar();
     } catch {
       setErro("Não foi possível criar o fornecedor.");
@@ -44,37 +52,22 @@ export default function FornecedoresPage() {
 
   return (
     <div className="max-w-2xl text-slate-900">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-        <Truck className="h-5 w-5 text-blue-600" />
-        Fornecedores
-      </h2>
-
-      <form onSubmit={criar} className="mb-6 flex gap-2">
-        <input
-          placeholder="Nome"
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          required
-          className="flex-1 rounded border border-slate-300 bg-slate-50 px-3 py-2"
-        />
-        <input
-          placeholder="Contato"
-          value={contato}
-          onChange={(e) => setContato(e.target.value)}
-          className="w-48 rounded border border-slate-300 bg-slate-50 px-3 py-2"
-        />
-        <button className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Truck className="h-5 w-5 text-blue-600" />
+          Fornecedores
+        </h2>
+        <button
+          onClick={() => {
+            setErro(null);
+            setModalAberto(true);
+          }}
+          className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+        >
           <Plus className="h-4 w-4" />
-          Adicionar
+          Cadastrar
         </button>
-      </form>
-
-      {erro && (
-        <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">
-          <AlertCircle className="h-4 w-4" />
-          {erro}
-        </p>
-      )}
+      </div>
 
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -102,6 +95,59 @@ export default function FornecedoresPage() {
           </li>
         ))}
       </ul>
+
+      {modalAberto && (
+        <ModalCadastro titulo="Novo Fornecedor" icone={Truck} onFechar={() => setModalAberto(false)}>
+          <form onSubmit={criar}>
+            <label className="mb-1 block text-sm text-slate-500">Nome</label>
+            <input
+              autoFocus
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              required
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <label className="mb-1 block text-sm text-slate-500">CNPJ (opcional)</label>
+            <input
+              value={cnpj}
+              onChange={(e) => setCnpj(e.target.value)}
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <label className="mb-1 block text-sm text-slate-500">Contato (opcional)</label>
+            <input
+              value={contato}
+              onChange={(e) => setContato(e.target.value)}
+              className="mb-4 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            {erro && (
+              <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                {erro}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setModalAberto(false)}
+                className="rounded border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4" />
+                Cadastrar
+              </button>
+            </div>
+          </form>
+        </ModalCadastro>
+      )}
     </div>
   );
 }

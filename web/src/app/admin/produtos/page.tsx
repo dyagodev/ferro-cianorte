@@ -1,9 +1,10 @@
 "use client";
 
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Package, Pencil, Search, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Package, Pencil, Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { CampoDinheiro } from "@/components/CampoDinheiro";
+import { ModalCadastro } from "@/components/ModalCadastro";
 import type { Loja, Produto } from "@/lib/types";
 
 type EdicaoEstoque = { produtoId: number; lojaId: number };
@@ -24,6 +25,7 @@ export default function ProdutosPage() {
   const [ultimaPagina, setUltimaPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [busca, setBusca] = useState("");
+  const [modalAberto, setModalAberto] = useState(false);
 
   const [descricao, setDescricao] = useState("");
   const [codigoInterno, setCodigoInterno] = useState("");
@@ -104,6 +106,7 @@ export default function ProdutosPage() {
       setMargemPercentual("");
       setPrecoVenda(0);
       setEstoqueMinimo("");
+      setModalAberto(false);
       await carregar();
     } catch {
       setErro("Não foi possível criar o produto.");
@@ -138,86 +141,24 @@ export default function ProdutosPage() {
 
   return (
     <div className="text-slate-900">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-        <Package className="h-5 w-5 text-blue-600" />
-        Produtos
-      </h2>
-
-      <form onSubmit={criar} className="mb-6 rounded border border-slate-200 bg-slate-50 p-4">
-        <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <input
-            placeholder="Descrição"
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
-            required
-            className="rounded border border-slate-300 bg-white px-3 py-2 lg:col-span-2"
-          />
-          <input
-            placeholder="Código interno"
-            value={codigoInterno}
-            onChange={(e) => setCodigoInterno(e.target.value)}
-            className="rounded border border-slate-300 bg-white px-3 py-2"
-          />
-          <input
-            placeholder="Marca"
-            value={marca}
-            onChange={(e) => setMarca(e.target.value)}
-            className="rounded border border-slate-300 bg-white px-3 py-2"
-          />
-          <label className="flex flex-col gap-1 text-sm text-slate-500">
-            Unidade
-            <input
-              placeholder="UN"
-              value={unidade}
-              onChange={(e) => setUnidade(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-500">
-            Preço custo
-            <CampoDinheiro
-              value={precoCusto}
-              onChange={setPrecoCusto}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-500">
-            Margem %
-            <input
-              type="number"
-              step="0.01"
-              placeholder="0"
-              value={margemPercentual}
-              onChange={(e) => setMargemPercentual(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-500">
-            Preço venda
-            <CampoDinheiro
-              value={precoVenda}
-              onChange={setPrecoVenda}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-500">
-            Estoque mínimo
-            <input
-              type="number"
-              placeholder="0"
-              value={estoqueMinimo}
-              onChange={(e) => setEstoqueMinimo(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-base text-slate-900"
-            />
-          </label>
-        </div>
-        <button className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
-          <Package className="h-4 w-4" />
-          Adicionar produto
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Package className="h-5 w-5 text-blue-600" />
+          Produtos
+        </h2>
+        <button
+          onClick={() => {
+            setErro(null);
+            setModalAberto(true);
+          }}
+          className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+        >
+          <Plus className="h-4 w-4" />
+          Cadastrar
         </button>
-      </form>
+      </div>
 
-      {erro && (
+      {erro && !modalAberto && (
         <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">
           <AlertCircle className="h-4 w-4" />
           {erro}
@@ -344,6 +285,116 @@ export default function ProdutosPage() {
           </button>
         </div>
       </div>
+
+      {modalAberto && (
+        <ModalCadastro titulo="Novo Produto" icone={Package} onFechar={() => setModalAberto(false)}>
+          <form onSubmit={criar}>
+            <label className="mb-1 block text-sm text-slate-500">Descrição</label>
+            <input
+              autoFocus
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              required
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <div className="mb-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Código interno</label>
+                <input
+                  value={codigoInterno}
+                  onChange={(e) => setCodigoInterno(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Marca</label>
+                <input
+                  value={marca}
+                  onChange={(e) => setMarca(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="mb-3 grid grid-cols-3 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Unidade</label>
+                <input
+                  placeholder="UN"
+                  value={unidade}
+                  onChange={(e) => setUnidade(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Preço custo</label>
+                <CampoDinheiro
+                  value={precoCusto}
+                  onChange={setPrecoCusto}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Margem %</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0"
+                  value={margemPercentual}
+                  onChange={(e) => setMargemPercentual(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Preço venda</label>
+                <CampoDinheiro
+                  value={precoVenda}
+                  onChange={setPrecoVenda}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Estoque mínimo</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={estoqueMinimo}
+                  onChange={(e) => setEstoqueMinimo(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {erro && (
+              <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                {erro}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setModalAberto(false)}
+                className="rounded border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4" />
+                Cadastrar
+              </button>
+            </div>
+          </form>
+        </ModalCadastro>
+      )}
     </div>
   );
 }

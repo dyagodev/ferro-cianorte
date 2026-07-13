@@ -137,7 +137,7 @@ class LinkProSyncService
      */
     public function reconciliarEstoqueCompleto(SyncConexao $conexao): SyncExecucao
     {
-        return $this->executar($conexao, 'reconciliacao_completa', function ($origem) {
+        return $this->executar($conexao, 'reconciliacao_completa', function ($origem) use ($conexao) {
             $registros = $origem->select(self::QUERY_ESTOQUE_COMPLETO);
             $atualizados = 0;
 

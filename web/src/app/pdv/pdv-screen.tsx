@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   Trash2,
   UserRound,
+  XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -52,6 +53,7 @@ export default function PdvScreen({
   const [modalClienteAberto, setModalClienteAberto] = useState(false);
   const [modalProdutoAberto, setModalProdutoAberto] = useState(false);
   const [modalMenuAberto, setModalMenuAberto] = useState(false);
+  const [modalCancelarAberto, setModalCancelarAberto] = useState(false);
   const [lojas, setLojas] = useState<Loja[]>([]);
   const [lojaSelecionadaId, setLojaSelecionadaId] = useState<number | null>(null);
   const [ultimaVenda, setUltimaVenda] = useState<VendaConcluida | null>(null);
@@ -92,6 +94,9 @@ export default function PdvScreen({
       if (event.key === "F3") {
         event.preventDefault();
         setModalProdutoAberto(true);
+      } else if (event.key === "F8") {
+        event.preventDefault();
+        if (carrinho.length > 0) setModalCancelarAberto(true);
       } else if (event.key === "F10") {
         event.preventDefault();
         setModalClienteAberto(true);
@@ -246,6 +251,18 @@ export default function PdvScreen({
     setCliente(null);
     setDescontoTexto("0");
     setModalPagamentoAberto(false);
+    buscaRef.current?.focus();
+  }
+
+  function cancelarOperacao() {
+    setCarrinho([]);
+    setCliente(null);
+    setDescontoTexto("0");
+    setDescontoTipo("valor");
+    setBusca("");
+    setResultados([]);
+    setErro(null);
+    setModalCancelarAberto(false);
     buscaRef.current?.focus();
   }
 
@@ -459,6 +476,14 @@ export default function PdvScreen({
               <Search className="h-4 w-4" />
               F3 - Buscar Produto
             </button>
+            <button
+              onClick={() => carrinho.length > 0 && setModalCancelarAberto(true)}
+              disabled={carrinho.length === 0}
+              className="flex items-center gap-1.5 text-red-600 hover:text-red-700 disabled:opacity-50"
+            >
+              <XCircle className="h-4 w-4" />
+              F8 - Cancelar Operação
+            </button>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-2xl font-semibold text-slate-900">Total: R$ {total.toFixed(2)}</span>
@@ -514,6 +539,33 @@ export default function PdvScreen({
           onFechar={() => setModalPagamentoAberto(false)}
           onConfirmar={confirmarVenda}
         />
+      )}
+
+      {modalCancelarAberto && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-lg border border-slate-300 bg-slate-50 p-6 text-center shadow-2xl">
+            <XCircle className="mx-auto mb-2 h-10 w-10 text-red-600" />
+            <p className="mb-1 text-lg font-semibold text-slate-900">Cancelar operação?</p>
+            <p className="mb-6 text-slate-600">
+              Todos os itens do carrinho, cliente e desconto serão perdidos.
+            </p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setModalCancelarAberto(false)}
+                className="rounded border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-100"
+              >
+                Não
+              </button>
+              <button
+                onClick={cancelarOperacao}
+                className="flex items-center gap-2 rounded bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-500"
+              >
+                <XCircle className="h-4 w-4" />
+                Sim, cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {ultimaVenda && (

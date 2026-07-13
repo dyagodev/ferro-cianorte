@@ -16,6 +16,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware(['auth', 'role:admin'])->group(function () {
         Route::post('/sync-conexoes/testar', [SyncConexaoController::class, 'testar'])->name('sync-conexoes.testar');
         Route::post('/sync-conexoes/{syncConexao}/sincronizar', [SyncConexaoController::class, 'sincronizar'])->name('sync-conexoes.sincronizar');
+        Route::post('/sync-conexoes/{syncConexao}/reconciliar-estoque', [SyncConexaoController::class, 'reconciliarEstoque'])->name('sync-conexoes.reconciliar-estoque');
         Route::get('/sync-conexoes/{syncConexao}/execucoes', [SyncConexaoController::class, 'execucoes'])->name('sync-conexoes.execucoes');
         Route::resource('sync-conexoes', SyncConexaoController::class)
             ->except(['show'])

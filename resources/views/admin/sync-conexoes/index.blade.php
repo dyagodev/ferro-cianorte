@@ -52,6 +52,10 @@
                                 @csrf
                                 <button type="submit" class="btn btn-sm">Sincronizar agora</button>
                             </form>
+                            <form class="inline" method="POST" action="{{ route('admin.sync-conexoes.reconciliar-estoque', $conexao) }}" title="Lê o estoque atual inteiro direto da origem, ignora o histórico incremental. Mais lento, use se o estoque estiver desatualizado.">
+                                @csrf
+                                <button type="submit" class="btn btn-secondary btn-sm">Reconciliar estoque</button>
+                            </form>
                             <a href="{{ route('admin.sync-conexoes.execucoes', $conexao) }}" class="btn btn-secondary btn-sm">Execuções</a>
                             <a href="{{ route('admin.sync-conexoes.edit', $conexao) }}" class="btn btn-secondary btn-sm">Editar</a>
                             <form class="inline" method="POST" action="{{ route('admin.sync-conexoes.destroy', $conexao) }}" onsubmit="return confirm('Remover esta conexão?');">

@@ -89,6 +89,25 @@ class SyncConexaoController extends Controller
             ->with($execucao->status === 'sucesso' ? 'sucesso' : 'erro', $mensagem);
     }
 
+    /**
+     * Rede de segurança: lê o estoque atual inteiro direto da origem (sem
+     * depender do cursor incremental), pra corrigir divergência quando o
+     * histórico nunca alcança o "agora" (loja com volume de mudança maior
+     * que o processado por ciclo).
+     */
+    public function reconciliarEstoque(SyncConexao $syncConexao, LinkProSyncService $service): RedirectResponse
+    {
+        $execucao = $service->reconciliarEstoqueCompleto($syncConexao);
+
+        $mensagem = $execucao->status === 'sucesso'
+            ? "Reconciliação completa concluída: {$execucao->estoque_atualizado} produto(s) de estoque corrigido(s)."
+            : "Reconciliação falhou: {$execucao->erro}";
+
+        return redirect()
+            ->route('admin.sync-conexoes.index')
+            ->with($execucao->status === 'sucesso' ? 'sucesso' : 'erro', $mensagem);
+    }
+
     public function execucoes(SyncConexao $syncConexao): View
     {
         $execucoes = $syncConexao->execucoes()->orderByDesc('iniciado_em')->paginate(20);

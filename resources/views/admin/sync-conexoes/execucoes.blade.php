@@ -10,6 +10,10 @@
                 @csrf
                 <button type="submit" class="btn">Sincronizar agora</button>
             </form>
+            <form method="POST" action="{{ route('admin.sync-conexoes.reconciliar-estoque', $syncConexao) }}">
+                @csrf
+                <button type="submit" class="btn btn-secondary">Reconciliar estoque</button>
+            </form>
             <a href="{{ route('admin.sync-conexoes.index') }}" class="btn btn-secondary">Voltar</a>
         </div>
     </div>
@@ -19,6 +23,7 @@
             <thead>
                 <tr>
                     <th>Início</th>
+                    <th>Tipo</th>
                     <th>Duração</th>
                     <th>Status</th>
                     <th>Vendas</th>
@@ -30,6 +35,7 @@
                 @forelse ($execucoes as $execucao)
                     <tr>
                         <td>{{ $execucao->iniciado_em->format('d/m/Y H:i:s') }}</td>
+                        <td style="font-size:13px;">{{ $execucao->tipo === 'reconciliacao_completa' ? 'reconciliação' : 'incremental' }}</td>
                         <td>
                             @if ($execucao->finalizado_em)
                                 {{ $execucao->iniciado_em->diffInSeconds($execucao->finalizado_em) }}s
@@ -69,7 +75,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" style="text-align:center; color:#6b7280; padding: 24px;">
+                        <td colspan="7" style="text-align:center; color:#6b7280; padding: 24px;">
                             Nenhuma execução registrada ainda.
                         </td>
                     </tr>

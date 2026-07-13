@@ -94,13 +94,85 @@ class LinkProSyncService
         limit 500
         SQL;
 
+    // Reconciliação completa: lê o estoque ATUAL direto de produto.qtd_estoque
+    // (não o histórico) — mais pesada, mas não depende do cursor incremental
+    // ter alcançado o presente. Usada como rede de segurança quando o volume
+    // de mudanças na loja é maior que o que o incremental consegue processar
+    // por ciclo (limit 500 de QUERY_ESTOQUE), o que faz o cursor nunca
+    // alcançar o "agora" de verdade.
+    private const QUERY_ESTOQUE_COMPLETO = <<<'SQL'
+        select
+          p.produto_codigo as codigo_interno,
+          p.qtd_estoque     as quantidade,
+          p.descricao          as descricao,
+          p.cean               as codigo_barras,
+          coalesce(u.descricao, 'UN') as unidade,
+          p.preco_custo        as preco_custo,
+          p.preco_venda        as preco_venda_cadastro
+        from produto p
+        left join prod_unidade u on u.id_prod_unidade = p.id_prod_unidade
+        where p.inativo = false
+          and p.produto_codigo is not null
+        SQL;
+
     /** @var string[] */
     private array $avisos = [];
 
     public function sincronizar(SyncConexao $conexao): SyncExecucao
     {
+        return $this->executar($conexao, 'incremental', function ($origem) use ($conexao) {
+            $vendasSincronizadas = $this->sincronizarVendas($conexao, $origem);
+            $estoqueAtualizado = $this->sincronizarEstoque($conexao, $origem);
+
+            return [$vendasSincronizadas, $estoqueAtualizado];
+        });
+    }
+
+    /**
+     * Rede de segurança contra o incremental nunca alcançar o "agora": lê o
+     * estoque atual de TODOS os produtos direto de produto.qtd_estoque (não
+     * depende do cursor de log_produto_qtd_estoque) e sobrescreve tudo.
+     * Mais pesado que o incremental (lê a tabela de produtos inteira), não
+     * roda a cada minuto — sob demanda ou num agendamento bem mais espaçado.
+     */
+    public function reconciliarEstoqueCompleto(SyncConexao $conexao): SyncExecucao
+    {
+        return $this->executar($conexao, 'reconciliacao_completa', function ($origem) {
+            $registros = $origem->select(self::QUERY_ESTOQUE_COMPLETO);
+            $atualizados = 0;
+
+            foreach ($registros as $registro) {
+                $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
+                if (! $produtoId) {
+                    $this->avisos[] = "Reconciliação: produto \"{$registro->codigo_interno}\" não encontrado, ajuste ignorado.";
+
+                    continue;
+                }
+
+                \App\Models\ProdutoEstoque::updateOrCreate(
+                    ['produto_id' => $produtoId, 'loja_id' => $conexao->loja_id],
+                    ['quantidade' => (float) $registro->quantidade],
+                );
+
+                $atualizados++;
+            }
+
+            return [0, $atualizados];
+        });
+    }
+
+    /**
+     * Esqueleto comum a sincronizar() e reconciliarEstoqueCompleto(): cria o
+     * registro de execução, abre/fecha a conexão dinâmica com a origem, e
+     * grava resultado ou erro de forma uniforme.
+     *
+     * @param  callable(Connection): array{0: int, 1: int}  $acao  retorna [vendas, estoque]
+     */
+    private function executar(SyncConexao $conexao, string $tipo, callable $acao): SyncExecucao
+    {
         $execucao = SyncExecucao::create([
             'sync_conexao_id' => $conexao->id,
+            'tipo' => $tipo,
             'iniciado_em' => now(),
             'status' => 'em_andamento',
         ]);
@@ -111,8 +183,7 @@ class LinkProSyncService
         try {
             $origem = $this->conectar($conexao, $nomeConexao);
 
-            $vendasSincronizadas = $this->sincronizarVendas($conexao, $origem);
-            $estoqueAtualizado = $this->sincronizarEstoque($conexao, $origem);
+            [$vendasSincronizadas, $estoqueAtualizado] = $acao($origem);
 
             $conexao->ultima_sincronizacao_em = now();
             $conexao->ultimo_erro = null;

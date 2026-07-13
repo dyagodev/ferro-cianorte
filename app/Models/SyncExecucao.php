@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'sync_conexao_id',
+    'tipo',
     'iniciado_em',
     'finalizado_em',
     'status',

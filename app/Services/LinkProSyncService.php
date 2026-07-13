@@ -403,25 +403,49 @@ class LinkProSyncService
         $precoVenda = (float) ($dadosOrigem['preco_venda_cadastro'] ?? 0);
         $margem = $precoCusto > 0 ? round((($precoVenda - $precoCusto) / $precoCusto) * 100, 2) : 0;
 
-        try {
-            $produto = Produto::create([
-                'codigo_interno' => $codigoInterno,
-                'codigo_barras' => $dadosOrigem['codigo_barras'] ?? null,
-                'descricao' => $descricao,
-                'unidade' => $dadosOrigem['unidade'] ?? 'UN',
-                'preco_custo' => $precoCusto,
-                'margem_percentual' => $margem,
-                'preco_venda' => $precoVenda,
-            ]);
+        $dadosProduto = [
+            'codigo_interno' => $codigoInterno,
+            'codigo_barras' => $dadosOrigem['codigo_barras'] ?? null,
+            'descricao' => $descricao,
+            'unidade' => $dadosOrigem['unidade'] ?? 'UN',
+            'preco_custo' => $precoCusto,
+            'margem_percentual' => $margem,
+            'preco_venda' => $precoVenda,
+        ];
 
+        try {
+            $produto = Produto::create($dadosProduto);
             $this->avisos[] = "Produto \"{$descricao}\" (código interno \"{$codigoInterno}\") cadastrado automaticamente.";
 
             return $produto->id;
         } catch (Throwable $e) {
+            // Código de barras genérico repetido em vários itens é comum em
+            // loja de material de construção (o cean já pode pertencer a
+            // outro produto) — o casamento com o Link Pro é sempre feito
+            // pelo codigo_interno, nunca pelo cean, então cadastrar sem
+            // código de barras não compromete a sincronização futura.
+            if ($dadosProduto['codigo_barras'] && $this->violaCodigoBarrasUnico($e)) {
+                try {
+                    $produto = Produto::create([...$dadosProduto, 'codigo_barras' => null]);
+                    $this->avisos[] = "Produto \"{$descricao}\" (código interno \"{$codigoInterno}\") cadastrado automaticamente sem código de barras — \"{$dadosProduto['codigo_barras']}\" já pertence a outro produto.";
+
+                    return $produto->id;
+                } catch (Throwable $e2) {
+                    $this->avisos[] = "Não foi possível cadastrar automaticamente o produto \"{$codigoInterno}\": {$e2->getMessage()}";
+
+                    return null;
+                }
+            }
+
             $this->avisos[] = "Não foi possível cadastrar automaticamente o produto \"{$codigoInterno}\": {$e->getMessage()}";
 
             return null;
         }
+    }
+
+    private function violaCodigoBarrasUnico(Throwable $e): bool
+    {
+        return str_contains($e->getMessage(), 'codigo_barras');
     }
 
     /**

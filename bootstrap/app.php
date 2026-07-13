@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
         ]);
+
+        // Só redireciona pra tela de login quando a rota não-autenticada é do
+        // admin web (Blade); rotas da API continuam devolvendo 401 JSON puro
+        // pro app desktop/front, sem esse redirect.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('admin/*') ? route('admin.login') : null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

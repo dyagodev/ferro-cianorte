@@ -75,12 +75,22 @@ class LinkProSyncService
         where c.id_negociacao = any(?::bigint[])
         SQL;
 
+    // id_ajuste_estoque_motivo só vem preenchido quando a mudança foi um
+    // ajuste manual (contagem, balança, entrada de mercadoria) — nulo quando
+    // é decorrente de venda. Filtramos pra só trazer ajuste manual de
+    // propósito: venda do Link Pro já é decrementada por sincronizarVendas(),
+    // contar ela de novo aqui decrementaria a mesma venda duas vezes.
+    // qtd_estoque_antigo permite aplicar como DELTA (não valor absoluto) —
+    // overwrite absoluto apagaria venda feita direto no nosso próprio caixa
+    // entre uma sincronização e outra, já que o Link Pro nunca fica sabendo
+    // dessa venda.
     private const QUERY_ESTOQUE = <<<'SQL'
         select
           l.id_log_produto_qtd_estoque as id,
-          p.produto_codigo   as codigo_interno,
-          l.qtd_estoque_novo as quantidade,
-          l.data_hora         as atualizado_em,
+          p.produto_codigo    as codigo_interno,
+          l.qtd_estoque_antigo as quantidade_antiga,
+          l.qtd_estoque_novo   as quantidade,
+          l.data_hora          as atualizado_em,
           p.descricao          as descricao,
           p.cean               as codigo_barras,
           coalesce(u.descricao, 'UN') as unidade,
@@ -90,6 +100,7 @@ class LinkProSyncService
         join produto p on p.id_produto = l.id_produto
         left join prod_unidade u on u.id_prod_unidade = p.id_prod_unidade
         where (l.data_hora, l.id_log_produto_qtd_estoque) > (?::timestamp, ?::bigint)
+          and l.id_ajuste_estoque_motivo is not null
         order by l.data_hora asc, l.id_log_produto_qtd_estoque asc
         limit 500
         SQL;
@@ -163,6 +174,20 @@ class LinkProSyncService
             $atualizados = 0;
             $produtoIdsEncontrados = [];
 
+            // O Link Pro nunca fica sabendo de venda feita direto no nosso
+            // próprio caixa (venda "nativa", sem sync_conexao_id) — o valor
+            // absoluto de produto.qtd_estoque dele, então, sempre vem mais
+            // alto do que a realidade por exatamente essa quantidade.
+            // Descontamos aqui em vez de sobrescrever cego, senão toda
+            // reconciliação apagaria as vendas feitas por fora do Link Pro.
+            $vendidoNativamentePorProduto = \App\Models\VendaItem::query()
+                ->join('vendas', 'vendas.id', '=', 'venda_itens.venda_id')
+                ->where('vendas.loja_id', $conexao->loja_id)
+                ->whereNull('vendas.sync_conexao_id')
+                ->groupBy('venda_itens.produto_id')
+                ->selectRaw('venda_itens.produto_id, sum(venda_itens.quantidade) as total')
+                ->pluck('total', 'produto_id');
+
             foreach ($registros as $registro) {
                 $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
                 if (! $produtoId) {
@@ -173,9 +198,12 @@ class LinkProSyncService
 
                 $produtoIdsEncontrados[] = $produtoId;
 
+                $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$produtoId] ?? 0);
+                $quantidadeCorrigida = (float) $registro->quantidade - $vendidoNativamente;
+
                 \App\Models\ProdutoEstoque::updateOrCreate(
                     ['produto_id' => $produtoId, 'loja_id' => $conexao->loja_id],
-                    ['quantidade' => (float) $registro->quantidade],
+                    ['quantidade' => $quantidadeCorrigida],
                 );
 
                 $atualizados++;
@@ -185,11 +213,23 @@ class LinkProSyncService
             // nessa loja de origem — qualquer produto que já tinha registro
             // aqui pra essa loja mas não apareceu agora não existe mais lá
             // (removido/desativado no Link Pro) ou zerou, então zera aqui
-            // também em vez de deixar um valor antigo parado pra sempre.
-            $zerados = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
-                ->where('quantidade', '!=', 0)
+            // também em vez de deixar um valor antigo parado pra sempre (0
+            // do Link Pro menos o que foi vendido nativamente, mesma
+            // correção de cima — senão apagaria venda nativa desse produto).
+            $faltantes = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
                 ->whereNotIn('produto_id', $produtoIdsEncontrados)
-                ->update(['quantidade' => 0]);
+                ->get();
+
+            $zerados = 0;
+            foreach ($faltantes as $estoqueFaltante) {
+                $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$estoqueFaltante->produto_id] ?? 0);
+                $quantidadeCorrigida = 0 - $vendidoNativamente;
+
+                if ((float) $estoqueFaltante->quantidade !== $quantidadeCorrigida) {
+                    $estoqueFaltante->update(['quantidade' => $quantidadeCorrigida]);
+                    $zerados++;
+                }
+            }
 
             if ($zerados > 0) {
                 $this->avisos[] = "Reconciliação: {$zerados} produto(s) zerado(s) por não terem sido encontrados na origem.";
@@ -369,7 +409,7 @@ class LinkProSyncService
             $uuid = Uuid::uuid5(self::NAMESPACE_LINKPRO, "{$conexao->id}:{$vendaExterna->id}")->toString();
 
             if (! Venda::where('uuid', $uuid)->exists()) {
-                $this->registrarVenda($uuid, $conexao->loja_id, $usuario->id, $vendaExterna->data_hora, $itens, $pagamentos, $subtotal, $desconto);
+                $this->registrarVenda($uuid, $conexao->id, $conexao->loja_id, $usuario->id, $vendaExterna->data_hora, $itens, $pagamentos, $subtotal, $desconto);
             }
 
             $processadas++;
@@ -383,6 +423,7 @@ class LinkProSyncService
 
     private function registrarVenda(
         string $uuid,
+        int $syncConexaoId,
         int $lojaId,
         int $userId,
         string $dataHora,
@@ -391,10 +432,11 @@ class LinkProSyncService
         float $subtotal,
         float $desconto,
     ): void {
-        DB::transaction(function () use ($uuid, $lojaId, $userId, $dataHora, $itens, $pagamentos, $subtotal, $desconto) {
+        DB::transaction(function () use ($uuid, $syncConexaoId, $lojaId, $userId, $dataHora, $itens, $pagamentos, $subtotal, $desconto) {
             $venda = Venda::create([
                 'uuid' => $uuid,
                 'loja_id' => $lojaId,
+                'sync_conexao_id' => $syncConexaoId,
                 'user_id' => $userId,
                 'subtotal' => $subtotal,
                 'desconto' => $desconto,
@@ -453,9 +495,12 @@ class LinkProSyncService
 
     /**
      * Ajustes de estoque feitos SEM venda no Link Pro (contagem manual,
-     * balança, entrada de mercadoria) — sobrescreve a quantidade
-     * correspondente aqui, produto a produto, pra nunca ficar com furo entre
-     * os dois sistemas.
+     * balança, entrada de mercadoria — QUERY_ESTOQUE já filtra só esses,
+     * exclui o que é decorrente de venda). Aplica como DELTA
+     * (qtd_estoque_novo - qtd_estoque_antigo), não como valor absoluto —
+     * overwrite apagaria uma venda feita direto no nosso próprio caixa que
+     * aconteceu entre uma sincronização e outra, já que o Link Pro nunca
+     * fica sabendo dela.
      */
     private function sincronizarEstoque(SyncConexao $conexao, Connection $origem): int
     {
@@ -477,10 +522,16 @@ class LinkProSyncService
                 continue;
             }
 
-            \App\Models\ProdutoEstoque::updateOrCreate(
+            $delta = (float) $registro->quantidade - (float) $registro->quantidade_antiga;
+            if ($delta === 0.0) {
+                continue;
+            }
+
+            $estoque = \App\Models\ProdutoEstoque::firstOrCreate(
                 ['produto_id' => $produtoId, 'loja_id' => $conexao->loja_id],
-                ['quantidade' => (float) $registro->quantidade],
+                ['quantidade' => 0],
             );
+            $estoque->increment('quantidade', $delta);
 
             $atualizados++;
         }

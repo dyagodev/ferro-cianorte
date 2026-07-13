@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Package, Pencil, Plus, Search, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Package, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { CampoDinheiro } from "@/components/CampoDinheiro";
@@ -139,6 +139,20 @@ export default function ProdutosPage() {
     }
   }
 
+  // "Excluir" aqui é sempre soft-delete (ativo = false) — o backend já
+  // filtra produto inativo em qualquer listagem (admin e PDV), não some
+  // do histórico de vendas já feitas.
+  async function desativar(produto: Produto) {
+    if (!window.confirm(`Desativar "${produto.descricao}"? Ele deixará de aparecer nas buscas e no PDV.`)) return;
+
+    try {
+      await apiFetch(`produtos/${produto.id}`, { method: "DELETE" });
+      await carregar();
+    } catch {
+      setErro("Não foi possível desativar o produto.");
+    }
+  }
+
   return (
     <div className="text-slate-900">
       <div className="mb-4 flex items-center justify-between">
@@ -186,12 +200,13 @@ export default function ProdutosPage() {
               {lojas.map((loja) => (
                 <th key={loja.id} className="px-3 py-2">Estoque {loja.nome}</th>
               ))}
+              <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
             {produtos.length === 0 && (
               <tr>
-                <td colSpan={4 + lojas.length} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={5 + lojas.length} className="px-3 py-8 text-center text-slate-500">
                   Nenhum produto encontrado{busca ? ` para "${busca}"` : ""}.
                 </td>
               </tr>
@@ -256,6 +271,16 @@ export default function ProdutosPage() {
                     </td>
                   );
                 })}
+                <td className="px-3 py-2">
+                  <button
+                    onClick={() => desativar(produto)}
+                    className="flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-sm text-red-600 hover:bg-red-50"
+                    title="Desativar produto"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Desativar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

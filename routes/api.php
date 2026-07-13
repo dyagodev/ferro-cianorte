@@ -49,6 +49,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('funcionarios', FuncionarioController::class);
         Route::apiResource('entregadores', EntregadorController::class);
 
+        Route::post('/vendas/{venda}/cancelar', [VendaController::class, 'cancelar']);
+
         Route::get('/relatorios/vendas', [RelatorioController::class, 'vendas']);
         Route::get('/relatorios/fechamento-caixa', [RelatorioController::class, 'fechamentoCaixa']);
         Route::get('/relatorios/produtos-mais-vendidos', [RelatorioController::class, 'produtosMaisVendidos']);

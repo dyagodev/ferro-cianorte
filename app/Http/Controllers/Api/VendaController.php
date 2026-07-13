@@ -64,6 +64,30 @@ class VendaController extends Controller
         return response()->json(['resultados' => $resultados]);
     }
 
+    /**
+     * Cancela uma venda concluída: devolve a quantidade de cada item pro
+     * estoque da loja (estorno) e marca o status, sem apagar o registro —
+     * mantém histórico/auditoria de que a venda existiu e foi cancelada.
+     */
+    public function cancelar(Venda $venda)
+    {
+        if ($venda->status === 'cancelada') {
+            return response()->json(['message' => 'Esta venda já está cancelada.'], 422);
+        }
+
+        DB::transaction(function () use ($venda) {
+            foreach ($venda->itens as $item) {
+                ProdutoEstoque::where('produto_id', $item->produto_id)
+                    ->where('loja_id', $venda->loja_id)
+                    ->increment('quantidade', $item->quantidade);
+            }
+
+            $venda->update(['status' => 'cancelada']);
+        });
+
+        return $venda->fresh(['itens', 'pagamentos']);
+    }
+
     private function registrarVenda(array $data, $user, bool $feitaOffline = false): Venda
     {
         return DB::transaction(function () use ($data, $user, $feitaOffline) {

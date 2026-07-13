@@ -180,10 +180,13 @@ class LinkProSyncService
             // alto do que a realidade por exatamente essa quantidade.
             // Descontamos aqui em vez de sobrescrever cego, senão toda
             // reconciliação apagaria as vendas feitas por fora do Link Pro.
+            // Venda cancelada já teve o estoque estornado (VendaController::cancelar)
+            // — contar ela aqui também descontaria a mesma quantidade duas vezes.
             $vendidoNativamentePorProduto = \App\Models\VendaItem::query()
                 ->join('vendas', 'vendas.id', '=', 'venda_itens.venda_id')
                 ->where('vendas.loja_id', $conexao->loja_id)
                 ->whereNull('vendas.sync_conexao_id')
+                ->where('vendas.status', '!=', 'cancelada')
                 ->groupBy('venda_itens.produto_id')
                 ->selectRaw('venda_itens.produto_id, sum(venda_itens.quantidade) as total')
                 ->pluck('total', 'produto_id');

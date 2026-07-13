@@ -145,6 +145,7 @@ type VendaResumo = {
   total: string;
   subtotal: string;
   desconto: string;
+  status: string;
   loja: { nome: string };
   vendedor: { name: string };
   cliente: { nome: string } | null;
@@ -152,10 +153,27 @@ type VendaResumo = {
 
 function RelatorioVendas({ query }: { query: string }) {
   const [dados, setDados] = useState<{ vendas: VendaResumo[]; totais: { quantidade_vendas: number; subtotal: number; desconto: number; total: number } } | null>(null);
+  const [cancelando, setCancelando] = useState<number | null>(null);
 
-  useEffect(() => {
+  function carregar() {
     apiFetch<typeof dados>(`relatorios/vendas?${query}`).then(setDados);
-  }, [query]);
+  }
+
+  useEffect(carregar, [query]);
+
+  async function cancelar(venda: VendaResumo) {
+    if (!window.confirm(`Cancelar a venda #${venda.id}? O estoque dos itens será devolvido.`)) return;
+
+    setCancelando(venda.id);
+    try {
+      await apiFetch(`vendas/${venda.id}/cancelar`, { method: "POST" });
+      carregar();
+    } catch {
+      window.alert("Não foi possível cancelar esta venda.");
+    } finally {
+      setCancelando(null);
+    }
+  }
 
   if (!dados) return <p className="text-slate-500">Carregando...</p>;
 
@@ -177,23 +195,50 @@ function RelatorioVendas({ query }: { query: string }) {
               <th className="px-3 py-2">Loja</th>
               <th className="px-3 py-2">Vendedor</th>
               <th className="px-3 py-2">Cliente</th>
+              <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Total</th>
+              <th className="px-3 py-2 print:hidden" />
             </tr>
           </thead>
           <tbody>
-            {dados.vendas.map((venda) => (
-              <tr key={venda.id} className="border-t border-slate-200">
-                <td className="px-3 py-2">{venda.id}</td>
-                <td className="px-3 py-2">{new Date(venda.created_at).toLocaleString("pt-BR")}</td>
-                <td className="px-3 py-2">{venda.loja.nome}</td>
-                <td className="px-3 py-2">{venda.vendedor.name}</td>
-                <td className="px-3 py-2">{venda.cliente?.nome ?? "—"}</td>
-                <td className="px-3 py-2">R$ {Number(venda.total).toFixed(2)}</td>
-              </tr>
-            ))}
+            {dados.vendas.map((venda) => {
+              const cancelada = venda.status === "cancelada";
+              return (
+                <tr key={venda.id} className={`border-t border-slate-200 ${cancelada ? "text-slate-400" : ""}`}>
+                  <td className="px-3 py-2">{venda.id}</td>
+                  <td className="px-3 py-2">{new Date(venda.created_at).toLocaleString("pt-BR")}</td>
+                  <td className="px-3 py-2">{venda.loja.nome}</td>
+                  <td className="px-3 py-2">{venda.vendedor.name}</td>
+                  <td className="px-3 py-2">{venda.cliente?.nome ?? "—"}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        cancelada ? "bg-slate-200 text-slate-600" : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {cancelada ? "Cancelada" : "Concluída"}
+                    </span>
+                  </td>
+                  <td className={`px-3 py-2 ${cancelada ? "line-through" : ""}`}>
+                    R$ {Number(venda.total).toFixed(2)}
+                  </td>
+                  <td className="px-3 py-2 print:hidden">
+                    {!cancelada && (
+                      <button
+                        onClick={() => cancelar(venda)}
+                        disabled={cancelando === venda.id}
+                        className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {dados.vendas.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={8} className="px-3 py-6 text-center text-slate-500">
                   Nenhuma venda no período.
                 </td>
               </tr>

@@ -28,14 +28,18 @@ class RelatorioController extends Controller
         }
 
         $vendas = $query->get();
+        // Venda cancelada continua listada (auditoria/histórico), mas não
+        // deve contar nos totais — é justamente pra corrigir o total que ela
+        // foi cancelada.
+        $vendasValidas = $vendas->where('status', '!=', 'cancelada');
 
         return response()->json([
             'vendas' => $vendas,
             'totais' => [
-                'quantidade_vendas' => $vendas->count(),
-                'subtotal' => (float) $vendas->sum('subtotal'),
-                'desconto' => (float) $vendas->sum('desconto'),
-                'total' => (float) $vendas->sum('total'),
+                'quantidade_vendas' => $vendasValidas->count(),
+                'subtotal' => (float) $vendasValidas->sum('subtotal'),
+                'desconto' => (float) $vendasValidas->sum('desconto'),
+                'total' => (float) $vendasValidas->sum('total'),
             ],
         ]);
     }
@@ -49,7 +53,8 @@ class RelatorioController extends Controller
 
         $query = VendaPagamento::query()
             ->join('vendas', 'vendas.id', '=', 'venda_pagamentos.venda_id')
-            ->whereBetween('vendas.created_at', [$inicio, $fim]);
+            ->whereBetween('vendas.created_at', [$inicio, $fim])
+            ->where('vendas.status', '!=', 'cancelada');
 
         if ($lojaId = $request->integer('loja_id')) {
             $query->where('vendas.loja_id', $lojaId);
@@ -83,7 +88,8 @@ class RelatorioController extends Controller
         $query = VendaItem::query()
             ->join('vendas', 'vendas.id', '=', 'venda_itens.venda_id')
             ->join('produtos', 'produtos.id', '=', 'venda_itens.produto_id')
-            ->whereBetween('vendas.created_at', [$inicio, $fim]);
+            ->whereBetween('vendas.created_at', [$inicio, $fim])
+            ->where('vendas.status', '!=', 'cancelada');
 
         if ($lojaId = $request->integer('loja_id')) {
             $query->where('vendas.loja_id', $lojaId);

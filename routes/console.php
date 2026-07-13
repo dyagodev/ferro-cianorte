@@ -25,3 +25,9 @@ Schedule::command('sync:reconciliar-estoque')
     ->dailyAt('03:00')
     ->timezone('America/Sao_Paulo')
     ->withoutOverlapping(30);
+
+// O incremental roda a cada minuto — sem expurgo, sync_execucoes cresce sem
+// parar (~1440 linhas/dia por conexão). Mantém só as últimas 48h.
+Schedule::command('sync:limpar-execucoes')
+    ->dailyAt('04:00')
+    ->timezone('America/Sao_Paulo');

@@ -115,6 +115,27 @@ class LinkProSyncService
           and p.produto_codigo is not null
         SQL;
 
+    // Cobre os textos de forma de pagamento que o Link Pro já manda prontos
+    // (confirmado real: "Dinheiro", "PIX", "Cartão" — ver sync-agent/README.md)
+    // pro nosso enum (dinheiro/cartao/pix/boleto/cheque/crediario/a_prazo/outros),
+    // já normalizado (sem acento, minúsculo). O de-para por conexão
+    // (mapa_formas_pagamento) só deve ser preenchido pra cobrir texto fora do
+    // padrão numa instalação específica — não devia ser necessário no caso comum.
+    private const MAPA_FORMAS_PADRAO = [
+        'dinheiro' => 'dinheiro',
+        'pix' => 'pix',
+        'cartao' => 'cartao',
+        'cartao de credito' => 'cartao',
+        'cartao de debito' => 'cartao',
+        'credito' => 'cartao',
+        'debito' => 'cartao',
+        'boleto' => 'boleto',
+        'cheque' => 'cheque',
+        'crediario' => 'crediario',
+        'a prazo' => 'a_prazo',
+        'convenio' => 'outros',
+    ];
+
     /** @var string[] */
     private array $avisos = [];
 
@@ -277,8 +298,14 @@ class LinkProSyncService
         $itensPorVenda = collect($origem->select(self::QUERY_ITENS, [$idsPg]))->groupBy('venda_id');
         $pagamentosPorVenda = collect($origem->select(self::QUERY_PAGAMENTOS, [$idsPg]))->groupBy('venda_id');
 
-        $mapaFormas = collect($conexao->mapa_formas_pagamento ?? [])
-            ->mapWithKeys(fn ($destino, $origemTexto) => [$this->normalizar($origemTexto) => $destino]);
+        // O de-para configurado na conexão tem prioridade (cobre texto fora do
+        // padrão numa instalação específica); o padrão embutido cobre o caso
+        // comum sem precisar de nenhuma configuração.
+        $mapaFormas = collect(self::MAPA_FORMAS_PADRAO)
+            ->merge(
+                collect($conexao->mapa_formas_pagamento ?? [])
+                    ->mapWithKeys(fn ($destino, $origemTexto) => [$this->normalizar($origemTexto) => $destino]),
+            );
 
         $usuario = $this->usuarioResponsavel();
         $processadas = 0;
@@ -312,9 +339,12 @@ class LinkProSyncService
             foreach ($pagamentosPorVenda->get($vendaExterna->id, []) as $pagamento) {
                 $forma = $mapaFormas->get($this->normalizar($pagamento->forma_pagamento));
                 if (! $forma) {
-                    $this->avisos[] = "Venda externa #{$vendaExterna->id}: forma de pagamento \"{$pagamento->forma_pagamento}\" sem mapeamento, usando \"dinheiro\".";
+                    // "outros" e não "dinheiro" de propósito: assumir dinheiro
+                    // pra uma forma de pagamento não reconhecida mascararia
+                    // PIX/cartão como dinheiro no fechamento de caixa.
+                    $this->avisos[] = "Venda externa #{$vendaExterna->id}: forma de pagamento \"{$pagamento->forma_pagamento}\" não reconhecida, usando \"outros\".";
                 }
-                $pagamentos[] = ['forma_pagamento' => $forma ?? 'dinheiro', 'valor' => (float) $pagamento->valor];
+                $pagamentos[] = ['forma_pagamento' => $forma ?? 'outros', 'valor' => (float) $pagamento->valor];
             }
 
             $subtotal = array_sum(array_map(fn ($i) => $i['quantidade'] * $i['preco_unitario'], $itens));

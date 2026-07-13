@@ -140,6 +140,7 @@ class LinkProSyncService
         return $this->executar($conexao, 'reconciliacao_completa', function ($origem) use ($conexao) {
             $registros = $origem->select(self::QUERY_ESTOQUE_COMPLETO);
             $atualizados = 0;
+            $produtoIdsEncontrados = [];
 
             foreach ($registros as $registro) {
                 $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
@@ -149,6 +150,8 @@ class LinkProSyncService
                     continue;
                 }
 
+                $produtoIdsEncontrados[] = $produtoId;
+
                 \App\Models\ProdutoEstoque::updateOrCreate(
                     ['produto_id' => $produtoId, 'loja_id' => $conexao->loja_id],
                     ['quantidade' => (float) $registro->quantidade],
@@ -157,7 +160,21 @@ class LinkProSyncService
                 $atualizados++;
             }
 
-            return [0, $atualizados];
+            // Essa leitura é a lista COMPLETA de produtos ativos com estoque
+            // nessa loja de origem — qualquer produto que já tinha registro
+            // aqui pra essa loja mas não apareceu agora não existe mais lá
+            // (removido/desativado no Link Pro) ou zerou, então zera aqui
+            // também em vez de deixar um valor antigo parado pra sempre.
+            $zerados = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
+                ->where('quantidade', '!=', 0)
+                ->whereNotIn('produto_id', $produtoIdsEncontrados)
+                ->update(['quantidade' => 0]);
+
+            if ($zerados > 0) {
+                $this->avisos[] = "Reconciliação: {$zerados} produto(s) zerado(s) por não terem sido encontrados na origem.";
+            }
+
+            return [0, $atualizados + $zerados];
         });
     }
 

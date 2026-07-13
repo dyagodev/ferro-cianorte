@@ -19,4 +19,9 @@ Schedule::command('sync:lojas')->everyMinute()->withoutOverlapping(10);
 // cada loja) roda de madrugada, fora do horário de funcionamento
 // configurado em qualquer loja, pra corrigir qualquer divergência que o
 // incremental não tenha alcançado ainda (ver ReconciliarEstoqueLojasLinkPro).
-Schedule::command('sync:reconciliar-estoque')->dailyAt('03:00')->withoutOverlapping(30);
+// ->timezone() é necessário porque o servidor roda em UTC (config('app.timezone'))
+// — sem isso, "03:00" dispararia às 3h UTC = meia-noite em Brasília.
+Schedule::command('sync:reconciliar-estoque')
+    ->dailyAt('03:00')
+    ->timezone('America/Sao_Paulo')
+    ->withoutOverlapping(30);

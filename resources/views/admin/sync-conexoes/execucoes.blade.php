@@ -34,7 +34,7 @@
             <tbody>
                 @forelse ($execucoes as $execucao)
                     <tr>
-                        <td>{{ $execucao->iniciado_em->format('d/m/Y H:i:s') }}</td>
+                        <td>{{ $execucao->iniciado_em->timezone('America/Sao_Paulo')->format('d/m/Y H:i:s') }}</td>
                         <td style="font-size:13px;">{{ $execucao->tipo === 'reconciliacao_completa' ? 'reconciliação' : 'incremental' }}</td>
                         <td>
                             @if ($execucao->finalizado_em)

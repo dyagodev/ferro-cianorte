@@ -42,7 +42,7 @@
                             </span>
                         </td>
                         <td>
-                            {{ $conexao->ultima_sincronizacao_em?->format('d/m/Y H:i') ?? 'nunca' }}
+                            {{ $conexao->ultima_sincronizacao_em?->timezone('America/Sao_Paulo')->format('d/m/Y H:i') ?? 'nunca' }}
                             @if ($conexao->ultimo_erro)
                                 <div style="color:#dc2626; font-size:12px;" title="{{ $conexao->ultimo_erro }}">⚠ último erro</div>
                             @endif

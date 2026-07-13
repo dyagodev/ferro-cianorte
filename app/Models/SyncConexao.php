@@ -62,6 +62,12 @@ class SyncConexao extends Model
      * janelas, só roda dentro de algum intervalo [inicio, fim) — pra não
      * bater no Postgres da loja fora do horário de funcionamento (ex.: loja
      * abre 7:30, fecha pro almoço às 11:30, reabre 13:30, fecha 17:30).
+     *
+     * O horário digitado na tela de configuração é sempre horário de
+     * Brasília (é assim que a pessoa que preenche pensa, "a loja abre
+     * 7:30"), independente do timezone configurado no servidor (aqui é
+     * UTC) — por isso converte explicitamente pra America/Sao_Paulo em vez
+     * de usar o timezone padrão da aplicação.
      */
     public function dentroDoHorarioDeFuncionamento(?Carbon $momento = null): bool
     {
@@ -71,7 +77,7 @@ class SyncConexao extends Model
             return true;
         }
 
-        $agora = ($momento ?? Carbon::now())->format('H:i');
+        $agora = ($momento ?? Carbon::now())->copy()->setTimezone('America/Sao_Paulo')->format('H:i');
 
         foreach ($janelas as $janela) {
             if (($janela['inicio'] ?? null) === null || ($janela['fim'] ?? null) === null) {

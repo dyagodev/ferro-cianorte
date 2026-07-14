@@ -95,10 +95,18 @@ class RelatorioController extends Controller
             $query->where('vendas.loja_id', $lojaId);
         }
 
+        $colunasOrdenacao = [
+            'quantidade_total' => 'quantidade_total',
+            'valor_total' => 'valor_total',
+            'descricao' => 'produtos.descricao',
+        ];
+        $sort = $colunasOrdenacao[$request->string('sort')->toString()] ?? 'quantidade_total';
+        $direction = strtolower($request->string('direction')->toString()) === 'asc' ? 'asc' : 'desc';
+
         $ranking = $query
             ->selectRaw('produtos.id as produto_id, produtos.descricao, sum(venda_itens.quantidade) as quantidade_total, sum(venda_itens.total) as valor_total')
             ->groupBy('produtos.id', 'produtos.descricao')
-            ->orderByDesc('valor_total')
+            ->orderBy($sort, $direction)
             ->limit($request->integer('limit') ?: 20)
             ->get();
 

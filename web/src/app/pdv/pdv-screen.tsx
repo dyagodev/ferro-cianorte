@@ -59,6 +59,7 @@ export default function PdvScreen({
   const [ultimaVenda, setUltimaVenda] = useState<VendaConcluida | null>(null);
   const [descontoTipo, setDescontoTipo] = useState<TipoDesconto>("valor");
   const [descontoTexto, setDescontoTexto] = useState("0");
+  const [quantidadeEditando, setQuantidadeEditando] = useState<Record<number, string>>({});
   const buscaRef = useRef<HTMLInputElement>(null);
 
   // Sempre carrega as lojas: admin escolhe em qual está vendendo, vendedor só usa
@@ -186,8 +187,7 @@ export default function PdvScreen({
   }
 
   function atualizarQuantidade(produtoId: number, quantidade: number) {
-    if (quantidade <= 0) {
-      removerItem(produtoId);
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
       return;
     }
     setCarrinho((atual) =>
@@ -380,9 +380,27 @@ export default function PdvScreen({
                     <input
                       type="number"
                       min={0}
-                      step="0.001"
-                      value={item.quantidade}
-                      onChange={(e) => atualizarQuantidade(item.produto.id, Number(e.target.value))}
+                      step="1"
+                      value={quantidadeEditando[item.produto.id] ?? String(item.quantidade)}
+                      onChange={(e) => {
+                        const bruto = e.target.value;
+                        setQuantidadeEditando((atual) => ({ ...atual, [item.produto.id]: bruto }));
+                        const num = Number(bruto);
+                        if (bruto !== "" && Number.isFinite(num) && num > 0) {
+                          atualizarQuantidade(item.produto.id, num);
+                        }
+                      }}
+                      onBlur={() => {
+                        setQuantidadeEditando((atual) => {
+                          const bruto = atual[item.produto.id];
+                          const num = Number(bruto);
+                          if (bruto === "" || !Number.isFinite(num) || num <= 0) {
+                            atualizarQuantidade(item.produto.id, 1);
+                          }
+                          const { [item.produto.id]: _, ...resto } = atual;
+                          return resto;
+                        });
+                      }}
                       className="w-20 rounded border border-slate-300 bg-white px-2 py-1"
                     />
                   </td>

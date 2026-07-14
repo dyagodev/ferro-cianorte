@@ -197,7 +197,7 @@ function RelatorioVendas({ query }: { query: string }) {
       <div className="overflow-auto rounded border border-slate-200">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-500">
-            <tr>
+            <tr className="divide-x divide-slate-200">
               <th className="px-3 py-2">#</th>
               <th className="px-3 py-2">Data</th>
               <th className="px-3 py-2">Loja</th>
@@ -212,7 +212,7 @@ function RelatorioVendas({ query }: { query: string }) {
             {dados.vendas.map((venda) => {
               const cancelada = venda.status === "cancelada";
               return (
-                <tr key={venda.id} className={`border-t border-slate-200 ${cancelada ? "text-slate-400" : ""}`}>
+                <tr key={venda.id} className={`divide-x divide-slate-200 border-t border-slate-200 ${cancelada ? "text-slate-400" : ""}`}>
                   <td className="px-3 py-2">{venda.id}</td>
                   <td className="px-3 py-2">{new Date(venda.created_at).toLocaleString("pt-BR")}</td>
                   <td className="px-3 py-2">{venda.loja.nome}</td>
@@ -334,7 +334,7 @@ function RelatorioProdutos({ query }: { query: string }) {
     <div className="overflow-auto rounded border border-slate-200">
       <table className="w-full text-left text-sm">
         <thead className="bg-slate-50 text-slate-500">
-          <tr>
+          <tr className="divide-x divide-slate-200">
             <th className="px-3 py-2">Produto</th>
             <th className="px-3 py-2">Quantidade vendida</th>
             <th className="px-3 py-2">Valor total</th>
@@ -342,7 +342,7 @@ function RelatorioProdutos({ query }: { query: string }) {
         </thead>
         <tbody>
           {produtos.map((produto, index) => (
-            <tr key={produto.produto_id} className="border-t border-slate-200">
+            <tr key={produto.produto_id} className="divide-x divide-slate-200 border-t border-slate-200">
               <td className="px-3 py-2">
                 {index + 1}. {produto.descricao}
               </td>
@@ -377,7 +377,7 @@ function RelatorioEstoqueBaixo({ lojaId }: { lojaId: string }) {
     <div className="overflow-auto rounded border border-slate-200">
       <table className="w-full text-left text-sm">
         <thead className="bg-slate-50 text-slate-500">
-          <tr>
+          <tr className="divide-x divide-slate-200">
             <th className="px-3 py-2">Produto</th>
             <th className="px-3 py-2">Loja</th>
             <th className="px-3 py-2">Estoque atual</th>
@@ -386,7 +386,7 @@ function RelatorioEstoqueBaixo({ lojaId }: { lojaId: string }) {
         </thead>
         <tbody>
           {itens.map((item, index) => (
-            <tr key={`${item.produto_id}-${index}`} className="border-t border-slate-200">
+            <tr key={`${item.produto_id}-${index}`} className="divide-x divide-slate-200 border-t border-slate-200">
               <td className="px-3 py-2">{item.descricao}</td>
               <td className="px-3 py-2">{item.loja_nome}</td>
               <td className="px-3 py-2 text-red-600">{item.quantidade_atual}</td>

@@ -196,7 +196,7 @@ export default function ProdutosPage() {
       <div className="overflow-auto rounded border border-slate-200">
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-sm text-slate-500">
-            <tr>
+            <tr className="divide-x divide-slate-200">
               <th className="px-3 py-2">Produto</th>
               <th className="px-3 py-2">Cod</th>
               <th className="px-3 py-2">Preço</th>
@@ -216,7 +216,7 @@ export default function ProdutosPage() {
               </tr>
             )}
             {produtos.map((produto) => (
-              <tr key={produto.id} className="border-t border-slate-200">
+              <tr key={produto.id} className="divide-x divide-slate-200 border-t border-slate-200">
                 <td className="px-3 py-2">{produto.descricao}</td>
                 <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? "—"}</td>
                 <td className="px-3 py-2">R$ {Number(produto.preco_venda).toFixed(2)}</td>

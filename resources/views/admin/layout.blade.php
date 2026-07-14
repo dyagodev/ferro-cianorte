@@ -33,6 +33,7 @@
         .card { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+        th + th, td + td { border-left: 1px solid #eee; }
         th { color: #6b7280; font-weight: 600; text-transform: uppercase; font-size: 12px; }
         .btn {
             display: inline-block;

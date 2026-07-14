@@ -356,7 +356,7 @@ export default function PdvScreen({
         <div className="flex-1 overflow-auto rounded border border-slate-200">
           <table className="w-full text-left text-slate-900">
             <thead className="bg-slate-50 text-sm text-slate-500">
-              <tr>
+              <tr className="divide-x divide-slate-200">
                 <th className="px-3 py-2">Descrição</th>
                 <th className="px-3 py-2">Qtd.</th>
                 <th className="px-3 py-2">Preço Unit. R$</th>
@@ -374,7 +374,7 @@ export default function PdvScreen({
                 </tr>
               )}
               {carrinho.map((item) => (
-                <tr key={item.produto.id} className="border-t border-slate-200">
+                <tr key={item.produto.id} className="divide-x divide-slate-200 border-t border-slate-200">
                   <td className="px-3 py-2">{item.produto.descricao}</td>
                   <td className="px-3 py-2">
                     <input

@@ -153,6 +153,10 @@ export default function ProdutosPage() {
     }
   }
 
+  // Ordena as colunas de loja por id (não por nome) — é o que dá Matriz,
+  // Floriano, SJP na ordem certa em vez de alfabética.
+  const lojasOrdenadas = [...lojas].sort((a, b) => a.id - b.id);
+
   return (
     <div className="text-slate-900">
       <div className="mb-4 flex items-center justify-between">
@@ -193,14 +197,14 @@ export default function ProdutosPage() {
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-sm text-slate-500">
             <tr>
-              <th className="px-3 py-2">Descrição</th>
-              <th className="px-3 py-2">Código Interno</th>
-              <th className="px-3 py-2">Preço venda</th>
-              <th className="px-3 py-2">Estoque Total</th>
-              {lojas.map((loja) => (
-                <th key={loja.id} className="px-3 py-2">Estoque {loja.nome}</th>
+              <th className="px-3 py-2">Produto</th>
+              <th className="px-3 py-2">Cod</th>
+              <th className="px-3 py-2">Preço</th>
+              {lojasOrdenadas.map((loja) => (
+                <th key={loja.id} className="px-3 py-2">{loja.nome}</th>
               ))}
-              <th className="px-3 py-2" />
+              <th className="px-3 py-2">Est Total</th>
+              <th className="px-3 py-2">Remover</th>
             </tr>
           </thead>
           <tbody>
@@ -216,8 +220,7 @@ export default function ProdutosPage() {
                 <td className="px-3 py-2">{produto.descricao}</td>
                 <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? "—"}</td>
                 <td className="px-3 py-2">R$ {Number(produto.preco_venda).toFixed(2)}</td>
-                <td className="px-3 py-2 font-semibold">{formatarQuantidade(totalEstoque(produto))}</td>
-                {lojas.map((loja) => {
+                {lojasOrdenadas.map((loja) => {
                   const quantidade = estoqueDoProduto(produto, loja.id);
                   const editandoEsta = edicao?.produtoId === produto.id && edicao.lojaId === loja.id;
 
@@ -271,6 +274,7 @@ export default function ProdutosPage() {
                     </td>
                   );
                 })}
+                <td className="px-3 py-2 font-semibold">{formatarQuantidade(totalEstoque(produto))}</td>
                 <td className="px-3 py-2">
                   <button
                     onClick={() => desativar(produto)}

@@ -157,14 +157,14 @@ type VendaResumo = {
   // verdade.
   vendedor_externo_nome: string | null;
   cliente: { nome: string } | null;
-  pagamentos: { forma_pagamento: FormaPagamento; valor: string }[];
+  pagamentos: { forma_pagamento: string; valor: string }[];
 };
 
 function nomeVendedor(venda: VendaResumo): string {
   return venda.vendedor_externo_nome ?? venda.vendedor.name;
 }
 
-const CORES_FORMA: Record<FormaPagamento, string> = {
+const CORES_FORMA: Record<string, string> = {
   boleto: "bg-amber-100 text-amber-800 border-amber-200",
   cartao: "bg-blue-100 text-blue-800 border-blue-200",
   dinheiro: "bg-emerald-100 text-emerald-800 border-emerald-200",
@@ -174,6 +174,14 @@ const CORES_FORMA: Record<FormaPagamento, string> = {
   a_prazo: "bg-rose-100 text-rose-800 border-rose-200",
   outros: "bg-slate-100 text-slate-700 border-slate-200",
 };
+
+function coresForma(forma: string): string {
+  return CORES_FORMA[forma] ?? "bg-slate-100 text-slate-700 border-slate-200";
+}
+
+function rotuloForma(forma: string): string {
+  return (ROTULO_FORMA as Record<string, string>)[forma] ?? forma;
+}
 
 function RelatorioVendas({ query }: { query: string }) {
   const [dados, setDados] = useState<{ vendas: VendaResumo[]; totais: { quantidade_vendas: number; subtotal: number; desconto: number; total: number } } | null>(null);
@@ -255,9 +263,9 @@ function RelatorioVendas({ query }: { query: string }) {
                         {venda.pagamentos.map((pag, idx) => (
                           <span
                             key={idx}
-                            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${CORES_FORMA[pag.forma_pagamento]}`}
+                            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${coresForma(pag.forma_pagamento)}`}
                           >
-                            {ROTULO_FORMA[pag.forma_pagamento]}
+                            {rotuloForma(pag.forma_pagamento)}
                           </span>
                         ))}
                       </div>

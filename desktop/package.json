@@ -1,6 +1,6 @@
 {
   "name": "ferro-cianorte-desktop",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Ferro Cianorte — app desktop (bolha flutuante) para Windows e Mac",
   "author": "DM Tecnologia",
@@ -35,7 +35,10 @@
       "category": "public.app-category.business"
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
     },
     "portable": {
       "artifactName": "${productName} Portable ${version}.${ext}"

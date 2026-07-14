@@ -143,15 +143,21 @@ class RelatorioController extends Controller
         return response()->json(['itens' => $itens]);
     }
 
+    /**
+     * As datas do filtro ("De"/"Até" na tela) são sempre dia civil de
+     * Brasília — sem informar o timezone de origem aqui, Carbon::parse
+     * assume o timezone padrão da aplicação (UTC), fazendo o início/fim do
+     * dia ficar 3h adiantado (perde/ganha venda perto da meia-noite).
+     */
     private function periodo(Request $request): array
     {
         $inicio = $request->filled('data_inicio')
-            ? Carbon::parse($request->string('data_inicio'))->startOfDay()
-            : Carbon::now()->startOfDay();
+            ? Carbon::parse($request->string('data_inicio'), 'America/Sao_Paulo')->startOfDay()
+            : Carbon::now('America/Sao_Paulo')->startOfDay();
 
         $fim = $request->filled('data_fim')
-            ? Carbon::parse($request->string('data_fim'))->endOfDay()
-            : Carbon::now()->endOfDay();
+            ? Carbon::parse($request->string('data_fim'), 'America/Sao_Paulo')->endOfDay()
+            : Carbon::now('America/Sao_Paulo')->endOfDay();
 
         return [$inicio, $fim];
     }

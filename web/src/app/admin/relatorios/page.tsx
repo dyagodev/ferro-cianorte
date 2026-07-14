@@ -148,8 +148,16 @@ type VendaResumo = {
   status: string;
   loja: { nome: string };
   vendedor: { name: string };
+  // Venda sincronizada do Link Pro guarda o vendedor de origem à parte —
+  // "vendedor" acima é sempre o usuário de integração, não quem vendeu de
+  // verdade.
+  vendedor_externo_nome: string | null;
   cliente: { nome: string } | null;
 };
+
+function nomeVendedor(venda: VendaResumo): string {
+  return venda.vendedor_externo_nome ?? venda.vendedor.name;
+}
 
 function RelatorioVendas({ query }: { query: string }) {
   const [dados, setDados] = useState<{ vendas: VendaResumo[]; totais: { quantidade_vendas: number; subtotal: number; desconto: number; total: number } } | null>(null);
@@ -208,7 +216,7 @@ function RelatorioVendas({ query }: { query: string }) {
                   <td className="px-3 py-2">{venda.id}</td>
                   <td className="px-3 py-2">{new Date(venda.created_at).toLocaleString("pt-BR")}</td>
                   <td className="px-3 py-2">{venda.loja.nome}</td>
-                  <td className="px-3 py-2">{venda.vendedor.name}</td>
+                  <td className="px-3 py-2">{nomeVendedor(venda)}</td>
                   <td className="px-3 py-2">{venda.cliente?.nome ?? "—"}</td>
                   <td className="px-3 py-2">
                     <span

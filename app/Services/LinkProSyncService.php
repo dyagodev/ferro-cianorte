@@ -38,8 +38,10 @@ class LinkProSyncService
           n.id_negociacao     as id,
           n.data              as data_hora,
           n.valor_total_venda as valor_total,
-          (select codigo_loja::text from dados_empresa limit 1) as loja_externa
+          (select codigo_loja::text from dados_empresa limit 1) as loja_externa,
+          coalesce(u.nome, n.nome_usuario) as vendedor_nome
         from negociacao n
+        left join usuario u on u.id_usuario = n.id_usuario
         where n.id_negociacao > ?
           and n.venda = true
           and n.pre_venda_codigo is null
@@ -412,7 +414,18 @@ class LinkProSyncService
             $uuid = Uuid::uuid5(self::NAMESPACE_LINKPRO, "{$conexao->id}:{$vendaExterna->id}")->toString();
 
             if (! Venda::where('uuid', $uuid)->exists()) {
-                $this->registrarVenda($uuid, $conexao->id, $conexao->loja_id, $usuario->id, $vendaExterna->data_hora, $itens, $pagamentos, $subtotal, $desconto);
+                $this->registrarVenda(
+                    $uuid,
+                    $conexao->id,
+                    $conexao->loja_id,
+                    $usuario->id,
+                    $vendaExterna->vendedor_nome ?? null,
+                    $vendaExterna->data_hora,
+                    $itens,
+                    $pagamentos,
+                    $subtotal,
+                    $desconto,
+                );
             }
 
             $processadas++;
@@ -429,18 +442,20 @@ class LinkProSyncService
         int $syncConexaoId,
         int $lojaId,
         int $userId,
+        ?string $vendedorExternoNome,
         string $dataHora,
         array $itens,
         array $pagamentos,
         float $subtotal,
         float $desconto,
     ): void {
-        DB::transaction(function () use ($uuid, $syncConexaoId, $lojaId, $userId, $dataHora, $itens, $pagamentos, $subtotal, $desconto) {
+        DB::transaction(function () use ($uuid, $syncConexaoId, $lojaId, $userId, $vendedorExternoNome, $dataHora, $itens, $pagamentos, $subtotal, $desconto) {
             $venda = Venda::create([
                 'uuid' => $uuid,
                 'loja_id' => $lojaId,
                 'sync_conexao_id' => $syncConexaoId,
                 'user_id' => $userId,
+                'vendedor_externo_nome' => $vendedorExternoNome,
                 'subtotal' => $subtotal,
                 'desconto' => $desconto,
                 'total' => $subtotal - $desconto,
@@ -450,9 +465,18 @@ class LinkProSyncService
 
             // Preserva a data real da venda de origem (não o momento da
             // sincronização), senão relatório por período/fechamento de
-            // caixa fica errado.
-            $venda->created_at = $dataHora;
-            $venda->updated_at = $dataHora;
+            // caixa fica errado. O timestamp do Link Pro vem "cru" (sem
+            // fuso, já em horário de Brasília, hora local da loja — o
+            // Postgres de origem confirma timezone America/Araguaina, que é
+            // Brasília) — parse com America/Sao_Paulo interpreta o valor
+            // certo, mas sem ->utc() o Carbon guarda esse mesmo relógio
+            // "rotulado" como Brasília e o Eloquent grava ele cru (sem
+            // converter), fazendo a leitura de volta (que assume UTC)
+            // aplicar o desconto de 3h errado. ->utc() converte de verdade
+            // pro instante UTC certo antes de gravar.
+            $momento = Carbon::parse($dataHora, 'America/Sao_Paulo')->utc();
+            $venda->created_at = $momento;
+            $venda->updated_at = $momento;
             $venda->save();
 
             $produtos = Produto::whereIn('id', array_column($itens, 'produto_id'))->get()->keyBy('id');

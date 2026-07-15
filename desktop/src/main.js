@@ -176,6 +176,19 @@ ipcMain.on("app:close", () => {
 });
 ipcMain.handle("app:platform", () => process.platform);
 
+// Imprime a página atual direto na impressora padrão do Windows, sem o
+// diálogo nativo de impressão (que pede confirmação a cada venda) — usa a
+// API de impressão do próprio Electron em vez do window.print() do
+// navegador, que sempre abre o diálogo. Silencioso de propósito: cupom de
+// venda tem que sair sozinho no caixa, sem clique extra.
+ipcMain.handle("app:print-silent", (event) =>
+  new Promise((resolve) => {
+    event.sender.print({ silent: true, printBackground: true }, (success, failureReason) => {
+      resolve({ success, failureReason });
+    });
+  }),
+);
+
 function findFreePort(startPort) {
   return new Promise((resolve, reject) => {
     const server = net.createServer();

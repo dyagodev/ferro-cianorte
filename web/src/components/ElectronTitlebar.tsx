@@ -10,6 +10,7 @@ declare global {
       minimizeToBubble: () => void;
       toggleMaximize: () => void;
       platform: () => Promise<string>;
+      imprimirSilencioso: () => Promise<{ success: boolean; failureReason?: string }>;
     };
   }
 }

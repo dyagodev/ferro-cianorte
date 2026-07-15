@@ -18,6 +18,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
+import { imprimir } from "@/lib/imprimir";
 import type { Cliente, Loja, Produto } from "@/lib/types";
 import ClienteModal from "./cliente-modal";
 import Cupom, { type VendaConcluida } from "./cupom";
@@ -266,8 +267,8 @@ export default function PdvScreen({
     buscaRef.current?.focus();
   }
 
-  function imprimirCupom() {
-    window.print();
+  async function imprimirCupom() {
+    await imprimir();
     setUltimaVenda(null);
   }
 

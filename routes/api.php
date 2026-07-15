@@ -29,10 +29,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/vendas/sync', [VendaController::class, 'sync']);
     Route::get('/vendas', [VendaController::class, 'index']);
 
-    // Sangria e fechamento de caixa: acessível a admin e vendedor, escopado
-    // à loja de cada um (admin informa a loja, vendedor usa a própria).
+    // Abertura, sangria e fechamento de caixa: acessível a admin e
+    // vendedor, escopado à loja de cada um (admin informa a loja, vendedor
+    // usa a própria).
+    Route::get('/caixa/situacao', [CaixaController::class, 'situacao']);
+    Route::post('/caixa/abertura', [CaixaController::class, 'abrir']);
     Route::post('/caixa/sangrias', [CaixaController::class, 'sangria']);
     Route::get('/caixa/fechamento', [CaixaController::class, 'fechamento']);
+    Route::post('/caixa/fechamento', [CaixaController::class, 'fechar']);
 
     // Administração: apenas role admin.
     Route::middleware('role:admin')->group(function () {

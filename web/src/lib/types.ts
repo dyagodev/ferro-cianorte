@@ -33,6 +33,37 @@ export type FormaPagamento =
   | "outros"
   | "a_prazo";
 
+export type VendaItem = {
+  id: number;
+  produto_id: number;
+  quantidade: string | number;
+  preco_original: string;
+  preco_unitario: string;
+  total: string;
+  produto: { descricao: string } | null;
+};
+
+export type VendaPagamento = {
+  id: number;
+  forma_pagamento: FormaPagamento;
+  valor: string;
+};
+
+export type Venda = {
+  id: number;
+  uuid: string;
+  created_at: string;
+  status: string;
+  subtotal: string;
+  desconto: string;
+  total: string;
+  cliente: { nome: string } | null;
+  vendedor: { name: string };
+  vendedor_externo_nome: string | null;
+  itens: VendaItem[];
+  pagamentos: VendaPagamento[];
+};
+
 // Ordem e teclas idênticas à tela de referência: B-Boleto C-Cartão D-Dinheiro H-Cheque N-Crediário P-Pix A-A Prazo O-Outros
 export const FORMAS_PAGAMENTO: { valor: FormaPagamento; rotulo: string; tecla: string }[] = [
   { valor: "boleto", rotulo: "Boleto", tecla: "B" },

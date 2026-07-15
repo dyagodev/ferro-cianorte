@@ -57,6 +57,7 @@ export type Venda = {
   subtotal: string;
   desconto: string;
   total: string;
+  sync_conexao_id: number | null;
   cliente: { nome: string } | null;
   vendedor: { name: string };
   vendedor_externo_nome: string | null;

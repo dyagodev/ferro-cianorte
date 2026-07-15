@@ -10,6 +10,7 @@ import {
   Printer,
   ReceiptText,
   TrendingUp,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -142,6 +143,15 @@ export default function RelatoriosPage() {
   );
 }
 
+type VendaItemResumo = {
+  id: number;
+  produto_id: number;
+  quantidade: string | number;
+  preco_unitario: string;
+  total: string;
+  produto: { descricao: string } | null;
+};
+
 type VendaResumo = {
   id: number;
   created_at: string;
@@ -157,6 +167,7 @@ type VendaResumo = {
   // verdade.
   vendedor_externo_nome: string | null;
   cliente: { nome: string } | null;
+  itens: VendaItemResumo[];
   pagamentos: { forma_pagamento: string; valor: string }[];
 };
 
@@ -186,6 +197,7 @@ function rotuloForma(forma: string): string {
 function RelatorioVendas({ query }: { query: string }) {
   const [dados, setDados] = useState<{ vendas: VendaResumo[]; totais: { quantidade_vendas: number; subtotal: number; desconto: number; total: number } } | null>(null);
   const [cancelando, setCancelando] = useState<number | null>(null);
+  const [vendaDetalhe, setVendaDetalhe] = useState<VendaResumo | null>(null);
 
   function carregar() {
     apiFetch<typeof dados>(`relatorios/vendas?${query}`).then(setDados);
@@ -238,7 +250,11 @@ function RelatorioVendas({ query }: { query: string }) {
             {dados.vendas.map((venda) => {
               const cancelada = venda.status === "cancelada";
               return (
-                <tr key={venda.id} className={`divide-x divide-slate-200 border-t border-slate-200 ${cancelada ? "text-slate-400" : ""}`}>
+                <tr
+                  key={venda.id}
+                  onClick={() => setVendaDetalhe(venda)}
+                  className={`cursor-pointer divide-x divide-slate-200 border-t border-slate-200 hover:bg-slate-100 ${cancelada ? "text-slate-400" : ""}`}
+                >
                   <td className="px-3 py-2">{venda.id}</td>
                   <td className="px-3 py-2">{new Date(venda.created_at).toLocaleString("pt-BR")}</td>
                   <td className="px-3 py-2">
@@ -286,7 +302,10 @@ function RelatorioVendas({ query }: { query: string }) {
                   <td className="px-3 py-2 print:hidden">
                     {!cancelada && (
                       <button
-                        onClick={() => cancelar(venda)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          cancelar(venda);
+                        }}
                         disabled={cancelando === venda.id}
                         className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
                       >
@@ -306,6 +325,112 @@ function RelatorioVendas({ query }: { query: string }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      {vendaDetalhe && <VendaDetalheModal venda={vendaDetalhe} onFechar={() => setVendaDetalhe(null)} />}
+    </div>
+  );
+}
+
+function VendaDetalheModal({ venda, onFechar }: { venda: VendaResumo; onFechar: () => void }) {
+  const cancelada = venda.status === "cancelada";
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onFechar();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onFechar]);
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 print:hidden" onClick={onFechar}>
+      <div
+        className="w-full max-w-lg rounded-lg border border-slate-300 bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">Venda #{venda.id}</h3>
+          <button onClick={onFechar} className="text-slate-500 hover:text-slate-900">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
+          <div>
+            <span className="block text-xs text-slate-400">Data</span>
+            {new Date(venda.created_at).toLocaleString("pt-BR")}
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400">Status</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cancelada ? "bg-slate-200 text-slate-600" : "bg-emerald-100 text-emerald-700"}`}>
+              {cancelada ? "Cancelada" : "Concluída"}
+            </span>
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400">Loja</span>
+            {venda.loja.nome}
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400">Vendedor</span>
+            {nomeVendedor(venda)}
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400">Cliente</span>
+            {venda.cliente?.nome ?? "não informado"}
+          </div>
+        </div>
+
+        <p className="mb-2 text-sm font-medium text-slate-600">Itens</p>
+        <div className="mb-4 max-h-56 overflow-auto rounded border border-slate-200">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500">
+              <tr className="divide-x divide-slate-200">
+                <th className="px-3 py-2">Produto</th>
+                <th className="px-3 py-2">Qtd.</th>
+                <th className="px-3 py-2">Preço unit.</th>
+                <th className="px-3 py-2">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {venda.itens.map((item) => (
+                <tr key={item.id} className="divide-x divide-slate-200 border-t border-slate-200 text-slate-900">
+                  <td className="px-3 py-2">{item.produto?.descricao ?? `#${item.produto_id}`}</td>
+                  <td className="px-3 py-2">{Number(item.quantidade)}</td>
+                  <td className="px-3 py-2">R$ {Number(item.preco_unitario).toFixed(2)}</td>
+                  <td className="px-3 py-2">R$ {Number(item.total).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="mb-2 text-sm font-medium text-slate-600">Pagamentos</p>
+        <ul className="mb-4 divide-y divide-slate-200 rounded border border-slate-200">
+          {venda.pagamentos.map((pagamento, idx) => (
+            <li key={idx} className="flex justify-between px-3 py-2 text-sm text-slate-900">
+              <span>{rotuloForma(pagamento.forma_pagamento)}</span>
+              <span>R$ {Number(pagamento.valor).toFixed(2)}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>R$ {Number(venda.subtotal).toFixed(2)}</span>
+          </div>
+          {Number(venda.desconto) > 0 && (
+            <div className="flex justify-between text-amber-600">
+              <span>Desconto</span>
+              <span>-R$ {Number(venda.desconto).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="mt-1 flex justify-between border-t border-slate-200 pt-1 text-base font-semibold text-slate-900">
+            <span>Total</span>
+            <span>R$ {Number(venda.total).toFixed(2)}</span>
+          </div>
+        </div>
       </div>
     </div>
   );

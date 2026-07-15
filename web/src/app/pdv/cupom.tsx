@@ -42,9 +42,6 @@ export default function Cupom({ venda }: { venda: VendaConcluida }) {
           <div className="flex justify-between">
             <span>
               {item.quantidade} x {item.precoUnitario.toFixed(2)}
-              {item.precoOriginal !== item.precoUnitario && (
-                <span className="ml-1 line-through">(R$ {item.precoOriginal.toFixed(2)})</span>
-              )}
             </span>
             <span>R$ {(item.quantidade * item.precoUnitario).toFixed(2)}</span>
           </div>

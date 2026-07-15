@@ -75,7 +75,11 @@
 </head>
 <body>
     <header>
-        <a href="{{ route('admin.sync-conexoes.index') }}">Admin — Sincronização de lojas</a>
+        <div style="display:flex; gap:20px; align-items:center;">
+            <a href="{{ route('admin.sync-conexoes.index') }}">Admin — Ferro Cianorte</a>
+            <a href="{{ route('admin.sync-conexoes.index') }}" style="font-weight:400; color:#cbd5e1;">Sincronização</a>
+            <a href="{{ route('admin.usuarios.index') }}" style="font-weight:400; color:#cbd5e1;">Usuários</a>
+        </div>
         @auth
             <form method="POST" action="{{ route('admin.logout') }}">
                 @csrf

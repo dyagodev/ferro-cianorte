@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\SyncConexaoController;
+use App\Http\Controllers\Admin\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -21,5 +22,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('sync-conexoes', SyncConexaoController::class)
             ->except(['show'])
             ->parameters(['sync-conexoes' => 'syncConexao']);
+
+        Route::resource('usuarios', UsuarioController::class)->except(['show']);
     });
 });

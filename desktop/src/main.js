@@ -186,14 +186,28 @@ ipcMain.handle("app:print-silent", (event) =>
   new Promise((resolve) => {
     // margins "none" é essencial aqui: sem isso o Electron aplica a margem
     // padrão do driver da impressora, que em impressora térmica de cupom
-    // (rolo estreito) corta o conteúdo encostado na borda direita — como o
-    // valor total, que fica alinhado à direita (justify-between). Com o
-    // diálogo nativo (antes da impressão silenciosa) o usuário via o preview
-    // e o driver se ajustava sozinho; sem diálogo, ninguém percebe até o
-    // cupom sair cortado no papel.
-    event.sender.print({ silent: true, printBackground: true, margins: { marginType: "none" } }, (success, failureReason) => {
-      resolve({ success, failureReason });
-    });
+    // (rolo estreito) corta o conteúdo encostado na borda — tanto direita
+    // quanto esquerda, dependendo do driver. Com o diálogo nativo (antes da
+    // impressão silenciosa) o usuário via o preview e ajustava; sem
+    // diálogo, ninguém percebe até o cupom sair cortado no papel.
+    //
+    // pageSize explícito em 80mm de largura pelo mesmo motivo: sem isso o
+    // Chromium usa o tamanho de papel padrão configurado no Windows pra
+    // essa impressora (Carta/A4, se a instalação padrão não foi trocada),
+    // que não bate com o rolo físico e faz o driver cortar o excesso.
+    // Altura generosa (297mm) cobre cupom longo — impressora de rolo
+    // contínuo corta pelo conteúdo real, não pela altura declarada aqui.
+    event.sender.print(
+      {
+        silent: true,
+        printBackground: true,
+        margins: { marginType: "none" },
+        pageSize: { width: 80000, height: 297000 },
+      },
+      (success, failureReason) => {
+        resolve({ success, failureReason });
+      },
+    );
   }),
 );
 

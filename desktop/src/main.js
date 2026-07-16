@@ -184,7 +184,14 @@ ipcMain.handle("app:platform", () => process.platform);
 // venda tem que sair sozinho no caixa, sem clique extra.
 ipcMain.handle("app:print-silent", (event) =>
   new Promise((resolve) => {
-    event.sender.print({ silent: true, printBackground: true }, (success, failureReason) => {
+    // margins "none" é essencial aqui: sem isso o Electron aplica a margem
+    // padrão do driver da impressora, que em impressora térmica de cupom
+    // (rolo estreito) corta o conteúdo encostado na borda direita — como o
+    // valor total, que fica alinhado à direita (justify-between). Com o
+    // diálogo nativo (antes da impressão silenciosa) o usuário via o preview
+    // e o driver se ajustava sozinho; sem diálogo, ninguém percebe até o
+    // cupom sair cortado no papel.
+    event.sender.print({ silent: true, printBackground: true, margins: { marginType: "none" } }, (success, failureReason) => {
       resolve({ success, failureReason });
     });
   }),

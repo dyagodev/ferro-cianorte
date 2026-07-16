@@ -18,23 +18,29 @@ class ProdutoController extends Controller
 
         $query = Produto::query()->where('ativo', true);
 
-        if ($busca = $request->string('q')->toString()) {
-            $query->where(function ($q) use ($busca) {
-                // O código interno (etiqueta própria da loja) é o identificador
-                // principal na busca — inclusive pelo leitor de código de barras,
-                // que lê essas etiquetas, não o código de barras do fabricante.
-                $q->where('codigo_interno', $busca)
-                    ->orWhere('descricao', 'like', "%{$busca}%");
-            });
-        }
-
         // A busca ao vivo do PDV/F3 nunca pagina (ver comentário abaixo) — é o
         // sinal que usamos pra saber que é o PDV chamando, não a tela de
         // gestão de produtos do admin. Lá o admin precisa ver produto sem
         // estoque também (pra poder cadastrar o estoque); no PDV, produto sem
-        // estoque na loja atual não é uma opção de venda, então nem aparece.
-        if ($lojaId && !$request->has('page')) {
-            $query->whereHas('estoques', fn ($q) => $q->where('loja_id', $lojaId)->where('quantidade', '>', 0));
+        // estoque na loja atual não é uma opção de venda válida.
+        $filtrarPorEstoque = $lojaId && !$request->has('page');
+        $comEstoqueNaLoja = fn ($q) => $q->whereHas('estoques', fn ($e) => $e->where('loja_id', $lojaId)->where('quantidade', '>', 0));
+
+        if ($busca = $request->string('q')->toString()) {
+            $query->where(function ($q) use ($busca, $filtrarPorEstoque, $comEstoqueNaLoja) {
+                // Código interno é o que o leitor de código de barras lê — bate
+                // exato e sempre retorna independente do estoque calculado:
+                // quem escaneou tem o item físico na mão, a contagem do sistema
+                // pode estar desatualizada ou negativa (dado sujo de import).
+                $q->where('codigo_interno', $busca);
+
+                $q->orWhere(function ($sub) use ($busca, $filtrarPorEstoque, $comEstoqueNaLoja) {
+                    $sub->where('descricao', 'like', "%{$busca}%");
+                    if ($filtrarPorEstoque) $comEstoqueNaLoja($sub);
+                });
+            });
+        } elseif ($filtrarPorEstoque) {
+            $comEstoqueNaLoja($query);
         }
 
         $query->orderBy('descricao');

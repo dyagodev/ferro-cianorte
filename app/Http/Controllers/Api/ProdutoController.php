@@ -28,6 +28,15 @@ class ProdutoController extends Controller
             });
         }
 
+        // A busca ao vivo do PDV/F3 nunca pagina (ver comentário abaixo) — é o
+        // sinal que usamos pra saber que é o PDV chamando, não a tela de
+        // gestão de produtos do admin. Lá o admin precisa ver produto sem
+        // estoque também (pra poder cadastrar o estoque); no PDV, produto sem
+        // estoque na loja atual não é uma opção de venda, então nem aparece.
+        if ($lojaId && !$request->has('page')) {
+            $query->whereHas('estoques', fn ($q) => $q->where('loja_id', $lojaId)->where('quantidade', '>', 0));
+        }
+
         $query->orderBy('descricao');
 
         // Paginação é opt-in (só quando ?page= é enviado): a busca ao vivo do

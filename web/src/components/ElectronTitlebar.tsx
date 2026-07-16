@@ -30,7 +30,7 @@ export function ElectronTitlebar() {
 
   return (
     <div
-      className="flex h-9 shrink-0 items-center justify-between bg-slate-900 pl-3 text-white"
+      className="flex h-9 shrink-0 items-center justify-between bg-slate-900 pl-3 text-white print:hidden"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <span className="text-xs font-medium tracking-wide text-slate-300">Ferro Cianorte</span>

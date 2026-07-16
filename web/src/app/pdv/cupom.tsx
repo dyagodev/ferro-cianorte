@@ -26,7 +26,7 @@ const ROTULO_FORMA_PAGAMENTO: Record<FormaPagamento, string> = {
 
 export default function Cupom({ venda }: { venda: VendaConcluida }) {
   return (
-    <div className="hidden print:block print:w-[72mm] print:text-black print:text-xs">
+    <div className="hidden print:block print:w-[68mm] print:pl-[4mm] print:text-black print:text-xs">
       <p className="text-center font-bold">{venda.lojaNome}</p>
       <p className="text-center">Cupom não fiscal</p>
       <p className="mt-2">Venda: #{venda.id}</p>

@@ -33,6 +33,20 @@ class LinkProSyncService
     // compatibilidade com vendas já sincronizadas antes desta migração.
     private const NAMESPACE_LINKPRO = '5f2f2f5e-3d0a-4a8a-9b8a-2f6a4c6f9f10';
 
+    // "pre_venda_codigo is null" (usado até 2026-07-16) partia da premissa de
+    // que negociação vinda de pré-venda nunca é venda de balcão finalizada —
+    // falso: confirmado com dado real (venda #39586, R$630, NFC-e 000011921
+    // Autorizada) que uma negociação pode ter pre_venda_codigo preenchido E
+    // estar 100% concluída, e nesse caso ficava de fora da sincronização pra
+    // sempre. O sinal confiável de "venda consolidada" é a emissão da NFC-e
+    // (confirmado com o usuário): only sincroniza quando existe uma NFC-e
+    // "Autorizada" pra essa negociação. nfe.id_negociacao nem sempre vem
+    // preenchido (visto no mesmo caso real), então o join certo é por
+    // nfe.id_caixa -> caixa.id_caixa -> caixa.id_negociacao. Isso não corre
+    // risco de pular venda nova cuja NFC-e ainda não autorizou: o cursor
+    // (id_negociacao > ?) só avança pras negociações que efetivamente vieram
+    // no resultado, então uma negociação sem NFC-e Autorizada ainda é
+    // reconsiderada na sincronização seguinte, não é perdida.
     private const QUERY_VENDAS = <<<'SQL'
         select
           n.id_negociacao     as id,
@@ -44,8 +58,13 @@ class LinkProSyncService
         left join usuario u on u.id_usuario = n.id_usuario
         where n.id_negociacao > ?
           and n.venda = true
-          and n.pre_venda_codigo is null
           and n.data >= ?::timestamp
+          and exists (
+            select 1
+            from caixa cx
+            join nfe on nfe.id_caixa = cx.id_caixa and nfe.situacao = 'Autorizada'
+            where cx.id_negociacao = n.id_negociacao
+          )
         order by n.id_negociacao asc
         limit 200
         SQL;

@@ -176,6 +176,18 @@ class LinkProSyncService
           and p.produto_codigo is not null
         SQL;
 
+    // Lista enxuta (só o código) de todo produto ativo no Link Pro dessa
+    // loja — usada pra desligar (produto_estoques.ativo = false) o que a
+    // loja tinha mas não tem mais, sem pedir os outros campos de
+    // QUERY_ESTOQUE_COMPLETO (não precisamos recadastrar nada aqui, só
+    // comparar quais códigos existem).
+    private const QUERY_CODIGOS_PRODUTOS_ATIVOS = <<<'SQL'
+        select produto_codigo as codigo_interno
+        from produto
+        where inativo = false
+          and produto_codigo is not null
+        SQL;
+
     // Cobre os textos de forma de pagamento que o Link Pro já manda prontos
     // (confirmado real: "Dinheiro", "PIX", "Cartão" — ver sync-agent/README.md)
     // pro nosso enum (dinheiro/cartao/pix/boleto/cheque/crediario/a_prazo/outros),
@@ -205,6 +217,7 @@ class LinkProSyncService
         return $this->executar($conexao, 'incremental', function ($origem) use ($conexao) {
             $vendasSincronizadas = $this->sincronizarVendas($conexao, $origem);
             $estoqueAtualizado = $this->sincronizarEstoque($conexao, $origem);
+            $this->sincronizarCatalogoLoja($conexao, $origem);
 
             return [$vendasSincronizadas, $estoqueAtualizado];
         });
@@ -668,6 +681,52 @@ class LinkProSyncService
         $conexao->save();
 
         return $atualizados;
+    }
+
+    /**
+     * Desliga (produto_estoques.ativo = false) o produto que essa loja
+     * tinha mas não tem mais no Link Pro dela — sem mexer no cadastro
+     * global do produto nem no vínculo dele com outras lojas, então uma
+     * loja não pode "apagar" produto de outra. Religa automaticamente se o
+     * produto reaparecer no Link Pro depois (ex.: reativado por engano lá).
+     * Roda toda sincronização incremental — a lista de códigos é leve (só
+     * a coluna código, catálogo de loja de material de construção não passa
+     * de baixos milhares de linhas), diferente de reconciliarEstoqueCompleto()
+     * que traz o registro inteiro de cada produto.
+     */
+    private function sincronizarCatalogoLoja(SyncConexao $conexao, Connection $origem): void
+    {
+        $codigosAtivos = collect($origem->select(self::QUERY_CODIGOS_PRODUTOS_ATIVOS))
+            ->pluck('codigo_interno')
+            ->all();
+
+        // Lista vazia quase certamente é falha de leitura, não uma loja sem
+        // nenhum produto ativo — "whereNotIn" com array vazio bateria em
+        // TUDO (NOT IN () é sempre verdadeiro), desligando o catálogo
+        // inteiro da loja de uma vez. Mais seguro pular o ciclo do que
+        // arriscar isso.
+        if (empty($codigosAtivos)) {
+            $this->avisos[] = 'Sincronização de catálogo: Link Pro não retornou nenhum produto ativo, pulando desligamento nesta rodada (provável falha de leitura).';
+
+            return;
+        }
+
+        $desligados = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
+            ->where('ativo', true)
+            ->whereHas('produto', fn ($q) => $q->whereNotIn('codigo_interno', $codigosAtivos))
+            ->update(['ativo' => false]);
+
+        $religados = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
+            ->where('ativo', false)
+            ->whereHas('produto', fn ($q) => $q->whereIn('codigo_interno', $codigosAtivos))
+            ->update(['ativo' => true]);
+
+        if ($desligados > 0) {
+            $this->avisos[] = "{$desligados} produto(s) desligado(s) desta loja (não encontrados mais no Link Pro dela).";
+        }
+        if ($religados > 0) {
+            $this->avisos[] = "{$religados} produto(s) religado(s) nesta loja (voltaram a existir no Link Pro dela).";
+        }
     }
 
     /**

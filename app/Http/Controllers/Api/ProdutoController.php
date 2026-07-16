@@ -18,29 +18,27 @@ class ProdutoController extends Controller
 
         $query = Produto::query()->where('ativo', true);
 
-        // A busca ao vivo do PDV/F3 nunca pagina (ver comentário abaixo) — é o
-        // sinal que usamos pra saber que é o PDV chamando, não a tela de
-        // gestão de produtos do admin. Lá o admin precisa ver produto sem
-        // estoque também (pra poder cadastrar o estoque); no PDV, produto sem
-        // estoque na loja atual não é uma opção de venda válida.
-        $filtrarPorEstoque = $lojaId && !$request->has('page');
-        $comEstoqueNaLoja = fn ($q) => $q->whereHas('estoques', fn ($e) => $e->where('loja_id', $lojaId)->where('quantidade', '>', 0));
-
         if ($busca = $request->string('q')->toString()) {
-            $query->where(function ($q) use ($busca, $filtrarPorEstoque, $comEstoqueNaLoja) {
-                // Código interno é o que o leitor de código de barras lê — bate
-                // exato e sempre retorna independente do estoque calculado:
-                // quem escaneou tem o item físico na mão, a contagem do sistema
-                // pode estar desatualizada ou negativa (dado sujo de import).
-                $q->where('codigo_interno', $busca);
-
-                $q->orWhere(function ($sub) use ($busca, $filtrarPorEstoque, $comEstoqueNaLoja) {
-                    $sub->where('descricao', 'like', "%{$busca}%");
-                    if ($filtrarPorEstoque) $comEstoqueNaLoja($sub);
-                });
+            // Código interno é o que o leitor de código de barras lê — bate
+            // exato. Não filtra mais por quantidade em estoque: esse dado
+            // vem sujo/desatualizado do Link Pro (muito produto com estoque
+            // zerado ou negativo mesmo sendo vendível de verdade), e
+            // escondia venda legítima — quem controla o que aparece agora é
+            // só o desligamento por loja logo abaixo.
+            $query->where(function ($q) use ($busca) {
+                $q->where('codigo_interno', $busca)
+                    ->orWhere('descricao', 'like', "%{$busca}%");
             });
-        } elseif ($filtrarPorEstoque) {
-            $comEstoqueNaLoja($query);
+        }
+
+        // A busca ao vivo do PDV/F3 nunca pagina (ver comentário abaixo) — é
+        // o sinal que usamos pra saber que é o PDV chamando, não a tela de
+        // gestão de produtos do admin (que precisa ver todo produto, mesmo
+        // desligado de uma loja, pra poder religar/gerenciar). No PDV,
+        // produto que essa loja não tem mais no Link Pro dela não é uma
+        // opção de venda (ver LinkProSyncService::sincronizarCatalogoLoja).
+        if ($lojaId && !$request->has('page')) {
+            $query->whereDoesntHave('estoques', fn ($q) => $q->where('loja_id', $lojaId)->where('ativo', false));
         }
 
         $query->orderBy('descricao');

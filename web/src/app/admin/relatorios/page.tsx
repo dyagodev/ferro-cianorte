@@ -447,11 +447,38 @@ const ROTULO_FORMA: Record<FormaPagamento, string> = {
   outros: "Outros",
 };
 
+type TipoMovimentacao = "abertura" | "sangria" | "fechamento";
+
+type Movimentacao = {
+  id: number;
+  tipo: TipoMovimentacao;
+  valor: string;
+  observacao: string | null;
+  created_at: string;
+  loja: { nome: string };
+  usuario: { name: string };
+};
+
+const ROTULO_TIPO_MOVIMENTACAO: Record<TipoMovimentacao, string> = {
+  abertura: "Abertura",
+  sangria: "Sangria",
+  fechamento: "Fechamento",
+};
+
+const CORES_TIPO_MOVIMENTACAO: Record<TipoMovimentacao, string> = {
+  abertura: "bg-blue-100 text-blue-800 border-blue-200",
+  sangria: "bg-rose-100 text-rose-800 border-rose-200",
+  fechamento: "bg-slate-200 text-slate-700 border-slate-300",
+};
+
 function RelatorioFechamento({ query }: { query: string }) {
   const [dados, setDados] = useState<{
+    quantidade_vendas: number;
     por_forma_pagamento: { forma_pagamento: FormaPagamento; total: string }[];
     por_vendedor: { vendedor_id: number; vendedor_nome: string; total: string }[];
     total_geral: number;
+    movimentacoes: Movimentacao[];
+    total_sangrias: number;
   } | null>(null);
 
   useEffect(() => {
@@ -461,40 +488,83 @@ function RelatorioFechamento({ query }: { query: string }) {
   if (!dados) return <p className="text-slate-500">Carregando...</p>;
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <div>
-        <h3 className="mb-2 flex items-center gap-1.5 font-medium text-slate-600">
-          <CreditCard className="h-4 w-4" />
-          Por forma de pagamento
-        </h3>
-        <ul className="divide-y divide-slate-200 rounded border border-slate-200">
-          {dados.por_forma_pagamento.map((item) => (
-            <li key={item.forma_pagamento} className="flex justify-between px-3 py-2 text-sm">
-              <span>{ROTULO_FORMA[item.forma_pagamento]}</span>
-              <span>R$ {Number(item.total).toFixed(2)}</span>
-            </li>
-          ))}
-          {dados.por_forma_pagamento.length === 0 && (
-            <li className="px-3 py-6 text-center text-sm text-slate-500">Nenhum recebimento no período.</li>
-          )}
-        </ul>
+    <div>
+      <div className="mb-6 grid gap-6 md:grid-cols-2">
+        <div>
+          <h3 className="mb-2 flex items-center gap-1.5 font-medium text-slate-600">
+            <CreditCard className="h-4 w-4" />
+            Por forma de pagamento
+          </h3>
+          <ul className="divide-y divide-slate-200 rounded border border-slate-200">
+            {dados.por_forma_pagamento.map((item) => (
+              <li key={item.forma_pagamento} className="flex justify-between px-3 py-2 text-sm">
+                <span>{ROTULO_FORMA[item.forma_pagamento]}</span>
+                <span>R$ {Number(item.total).toFixed(2)}</span>
+              </li>
+            ))}
+            {dados.por_forma_pagamento.length === 0 && (
+              <li className="px-3 py-6 text-center text-sm text-slate-500">Nenhum recebimento no período.</li>
+            )}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="mb-2 font-medium text-slate-600">Por vendedor</h3>
+          <ul className="divide-y divide-slate-200 rounded border border-slate-200">
+            {dados.por_vendedor.map((item) => (
+              <li key={item.vendedor_id} className="flex justify-between px-3 py-2 text-sm">
+                <span>{item.vendedor_nome}</span>
+                <span>R$ {Number(item.total).toFixed(2)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      <div>
-        <h3 className="mb-2 font-medium text-slate-600">Por vendedor</h3>
-        <ul className="divide-y divide-slate-200 rounded border border-slate-200">
-          {dados.por_vendedor.map((item) => (
-            <li key={item.vendedor_id} className="flex justify-between px-3 py-2 text-sm">
-              <span>{item.vendedor_nome}</span>
-              <span>R$ {Number(item.total).toFixed(2)}</span>
-            </li>
-          ))}
-        </ul>
+      <div className="mb-6 flex flex-wrap gap-6 text-sm text-slate-600">
+        <span>Vendas: {dados.quantidade_vendas}</span>
+        <span>Sangrias: R$ {dados.total_sangrias.toFixed(2)}</span>
+        <span className="text-lg font-semibold text-slate-900">Total geral: R$ {dados.total_geral.toFixed(2)}</span>
       </div>
 
-      <p className="text-lg font-semibold text-slate-900 md:col-span-2">
-        Total geral: R$ {dados.total_geral.toFixed(2)}
-      </p>
+      <h3 className="mb-2 font-medium text-slate-600">Movimentações de caixa</h3>
+      <div className="overflow-auto rounded border border-slate-200">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-slate-500">
+            <tr className="divide-x divide-slate-200">
+              <th className="px-3 py-2">Data</th>
+              <th className="px-3 py-2">Tipo</th>
+              <th className="px-3 py-2">Loja</th>
+              <th className="px-3 py-2">Usuário</th>
+              <th className="px-3 py-2">Valor</th>
+              <th className="px-3 py-2">Observação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dados.movimentacoes.map((mov) => (
+              <tr key={mov.id} className="divide-x divide-slate-200 border-t border-slate-200">
+                <td className="px-3 py-2">{new Date(mov.created_at).toLocaleString("pt-BR")}</td>
+                <td className="px-3 py-2">
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${CORES_TIPO_MOVIMENTACAO[mov.tipo]}`}>
+                    {ROTULO_TIPO_MOVIMENTACAO[mov.tipo]}
+                  </span>
+                </td>
+                <td className="px-3 py-2">{mov.loja.nome}</td>
+                <td className="px-3 py-2">{mov.usuario.name}</td>
+                <td className="px-3 py-2">R$ {Number(mov.valor).toFixed(2)}</td>
+                <td className="px-3 py-2 text-slate-500">{mov.observacao ?? "—"}</td>
+              </tr>
+            ))}
+            {dados.movimentacoes.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                  Nenhuma movimentação de caixa no período.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

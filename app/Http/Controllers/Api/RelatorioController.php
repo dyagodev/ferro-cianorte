@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\MovimentacaoCaixa;
 use App\Models\Produto;
 use App\Models\Venda;
 use App\Models\VendaItem;
@@ -71,10 +72,29 @@ class RelatorioController extends Controller
             ->groupBy('users.id', 'users.name')
             ->get();
 
+        $quantidadeVendas = Venda::query()
+            ->whereBetween('created_at', [$inicio, $fim])
+            ->where('status', '!=', 'cancelada')
+            ->when($lojaId, fn ($q) => $q->where('loja_id', $lojaId))
+            ->count();
+
+        // Histórico de abertura/sangria/fechamento do período — é o que
+        // efetivamente mostra se o caixa bateu: cada "fechamento" carrega na
+        // observação o valor esperado e a diferença apurada na contagem.
+        $movimentacoes = MovimentacaoCaixa::query()
+            ->with(['loja:id,nome', 'usuario:id,name'])
+            ->whereBetween('created_at', [$inicio, $fim])
+            ->when($lojaId, fn ($q) => $q->where('loja_id', $lojaId))
+            ->orderByDesc('created_at')
+            ->get();
+
         return response()->json([
+            'quantidade_vendas' => $quantidadeVendas,
             'por_forma_pagamento' => $porFormaPagamento,
             'por_vendedor' => $porVendedor,
             'total_geral' => (float) $porFormaPagamento->sum('total'),
+            'movimentacoes' => $movimentacoes,
+            'total_sangrias' => (float) $movimentacoes->where('tipo', 'sangria')->sum('valor'),
         ]);
     }
 

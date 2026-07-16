@@ -10,13 +10,17 @@ import {
   ListChecks,
   Lock,
   Menu as MenuIcon,
+  Printer,
   ReceiptText,
   Unlock,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/apiClient";
+import { imprimir } from "@/lib/imprimir";
 import type { FormaPagamento, Venda } from "@/lib/types";
+import Cupom, { type VendaConcluida } from "./cupom";
 
 type Fechamento = {
   abertura: { valor: string; created_at: string } | null;
@@ -584,12 +588,45 @@ function BadgeOrigem({ venda }: { venda: Venda }) {
   );
 }
 
+function vendaParaCupom(venda: Venda): VendaConcluida {
+  return {
+    id: venda.id,
+    dataHora: venda.created_at,
+    lojaNome: venda.loja.nome,
+    vendedorNome: venda.vendedor_externo_nome ?? venda.vendedor.name,
+    clienteNome: venda.cliente?.nome ?? "não informado",
+    itens: venda.itens.map((item) => ({
+      descricao: item.produto?.descricao ?? `#${item.produto_id}`,
+      quantidade: Number(item.quantidade),
+      precoOriginal: Number(item.preco_original),
+      precoUnitario: Number(item.preco_unitario),
+    })),
+    pagamentos: venda.pagamentos.map((pagamento) => ({
+      forma_pagamento: pagamento.forma_pagamento,
+      valor: Number(pagamento.valor),
+    })),
+    subtotal: Number(venda.subtotal),
+    desconto: Number(venda.desconto),
+    total: Number(venda.total),
+  };
+}
+
 function VendaDetalhe({ venda }: { venda: Venda }) {
   const cancelada = venda.status === "cancelada";
   const nomeVendedor = venda.vendedor_externo_nome ?? venda.vendedor.name;
 
   return (
     <div>
+      <div className="mb-4 flex justify-end print:hidden">
+        <button
+          onClick={() => imprimir()}
+          className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+        >
+          <Printer className="h-4 w-4" />
+          Imprimir
+        </button>
+      </div>
+
       <div className="mb-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
         <div>
           <span className="block text-xs text-slate-400">Data</span>
@@ -665,6 +702,15 @@ function VendaDetalhe({ venda }: { venda: Venda }) {
           <span>R$ {Number(venda.total).toFixed(2)}</span>
         </div>
       </div>
+
+      {/*
+        MenuModal fica dentro do wrapper "print:hidden" do pdv-screen — um
+        Cupom aninhado ali dentro nunca apareceria na impressão, porque
+        display:none no ancestral vence o print:block do próprio Cupom. Um
+        portal pro body escapa dessa árvore, igual ao cupom da venda recém-
+        concluída (que fica fora do wrapper de propósito).
+      */}
+      {typeof document !== "undefined" && createPortal(<Cupom venda={vendaParaCupom(venda)} />, document.body)}
     </div>
   );
 }

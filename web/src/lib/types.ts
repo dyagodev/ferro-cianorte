@@ -61,6 +61,7 @@ export type Venda = {
   cliente: { nome: string } | null;
   vendedor: { name: string };
   vendedor_externo_nome: string | null;
+  loja: { nome: string };
   itens: VendaItem[];
   pagamentos: VendaPagamento[];
 };

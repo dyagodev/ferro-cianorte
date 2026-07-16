@@ -16,7 +16,7 @@ class VendaController extends Controller
     {
         $user = $request->user();
 
-        $query = Venda::with(['itens.produto', 'pagamentos', 'cliente', 'vendedor'])
+        $query = Venda::with(['itens.produto', 'pagamentos', 'cliente', 'vendedor', 'loja'])
             ->orderByDesc('created_at');
 
         if (! $user->isAdmin()) {

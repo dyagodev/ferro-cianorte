@@ -45,6 +45,16 @@ if (fs.existsSync(publicDir)) {
   fs.cpSync(publicDir, path.join(appDir, "public"), { recursive: true });
 }
 
+// O app não usa next/image, então "sharp" nunca é chamado de verdade — mas o
+// npm instala ele mesmo assim (dependência opcional do Next) com o binário
+// nativo da máquina que rodou o build (aqui, sempre Mac). Empacotar esse
+// binário dentro do instalador Windows é peso morto arriscado: se o Next
+// tentar carregar sharp por engano lá, quebra o servidor embutido sem
+// deixar rastro. Mais seguro tirar do pacote de vez.
+for (const pasta of ["sharp", "@img"]) {
+  fs.rmSync(path.join(appDir, "node_modules", pasta), { recursive: true, force: true });
+}
+
 fs.writeFileSync(path.join(destDir, "server-entry.json"), JSON.stringify({ entry: path.relative(destDir, serverEntry) }));
 
 console.log(`web-standalone pronto em ${destDir} (server.js em ${path.relative(destDir, serverEntry)})`);

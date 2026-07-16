@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, Menu } = require("electron");
+const { app, BrowserWindow, screen, ipcMain, Menu, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const net = require("net");
@@ -9,6 +9,7 @@ const PROD_API_URL = "https://ferro.dmtecnologia.com/api";
 const ICON_PATH = path.join(__dirname, "..", "assets", "icon.png");
 const POSITION_FILE = path.join(app.getPath("userData"), "bubble-position.json");
 const WINDOW_STATE_FILE = path.join(app.getPath("userData"), "window-state.json");
+const SERVER_LOG_FILE = path.join(app.getPath("userData"), "server.log");
 
 let bubbleWindow = null;
 let mainWindow = null;
@@ -241,6 +242,12 @@ async function startEmbeddedServer() {
   if (!entry) throw new Error("server-entry.json não encontrado em web-standalone/ — rode prepare:web antes de empacotar");
   const serverEntry = path.join(webStandaloneDir, entry);
 
+  // stdio ia direto pro limbo (stdio: "ignore") — se o servidor embutido
+  // travasse ao subir, não sobrava rastro nenhum pra diagnosticar. Agora
+  // stdout/stderr do processo filho vão pro mesmo log de diagnóstico.
+  const logStream = fs.createWriteStream(SERVER_LOG_FILE, { flags: "a" });
+  logStream.write(`\n--- iniciando servidor embutido em ${new Date().toISOString()} ---\n`);
+
   serverProcess = spawn(process.execPath, [serverEntry], {
     env: {
       ...process.env,
@@ -250,30 +257,55 @@ async function startEmbeddedServer() {
       LARAVEL_API_URL: PROD_API_URL,
       ELECTRON_RUN_AS_NODE: "1",
     },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  serverProcess.stdout.pipe(logStream);
+  serverProcess.stderr.pipe(logStream);
+  serverProcess.on("exit", (code, signal) => {
+    logStream.write(`--- servidor embutido encerrou (code=${code} signal=${signal}) ---\n`);
   });
 
   serverUrl = `http://127.0.0.1:${port}`;
   await waitForServer(serverUrl);
 }
 
+function relatarErroFatal(erro) {
+  console.error(erro);
+  try {
+    fs.appendFileSync(SERVER_LOG_FILE, `\n--- erro fatal no startup em ${new Date().toISOString()} ---\n${erro?.stack ?? erro}\n`);
+  } catch {
+    // Se nem o log deu pra escrever, não tem mais o que fazer — só mostra o diálogo.
+  }
+  dialog.showErrorBox(
+    "Ferro Cianorte não conseguiu iniciar",
+    `Ocorreu um erro ao abrir o app:\n\n${erro?.message ?? erro}\n\nDetalhes em: ${SERVER_LOG_FILE}`,
+  );
+  app.quit();
+}
+
 app.whenReady().then(async () => {
-  app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+  try {
+    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
-  await startEmbeddedServer();
-  await createMainWindow();
-  createBubbleWindow();
+    await startEmbeddedServer();
+    await createMainWindow();
+    createBubbleWindow();
 
-  // Sempre começa como bolha flutuante, tanto no login automático quanto ao
-  // abrir manualmente — a janela cheia só some (fica em memória) até expandir.
-  showBubble();
+    // Sempre começa como bolha flutuante, tanto no login automático quanto ao
+    // abrir manualmente — a janela cheia só some (fica em memória) até expandir.
+    showBubble();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow().then(showBubble);
-    }
-  });
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createMainWindow().then(showBubble);
+      }
+    });
+  } catch (erro) {
+    relatarErroFatal(erro);
+  }
 });
+
+process.on("uncaughtException", relatarErroFatal);
 
 app.on("before-quit", () => {
   isQuitting = true;

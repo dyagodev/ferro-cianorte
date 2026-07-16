@@ -69,6 +69,35 @@ class LinkProSyncService
         limit 200
         SQL;
 
+    // Mesma regra da QUERY_VENDAS, mas pra recuperação manual
+    // (LinkProSyncService::recuperarVendas): não usa o cursor incremental
+    // (id_negociacao > cursor persistido), só um cursor local que começa do
+    // 0 dentro do intervalo de datas pedido — assim pega tanto venda nova
+    // quanto venda antiga que ficou de fora por causa da regra velha
+    // (pre_venda_codigo), sem precisar mexer no cursor real usado pelo
+    // sync:lojas de cada minuto.
+    private const QUERY_VENDAS_RECUPERACAO = <<<'SQL'
+        select
+          n.id_negociacao     as id,
+          n.data              as data_hora,
+          n.valor_total_venda as valor_total,
+          coalesce(u.nome, n.nome_usuario) as vendedor_nome
+        from negociacao n
+        left join usuario u on u.id_usuario = n.id_usuario
+        where n.id_negociacao > ?
+          and n.venda = true
+          and n.data >= ?::timestamp
+          and n.data < ?::timestamp
+          and exists (
+            select 1
+            from caixa cx
+            join nfe on nfe.id_caixa = cx.id_caixa and nfe.situacao = 'Autorizada'
+            where cx.id_negociacao = n.id_negociacao
+          )
+        order by n.id_negociacao asc
+        limit 500
+        SQL;
+
     private const QUERY_ITENS = <<<'SQL'
         select
           iv.id_negociacao   as venda_id,
@@ -356,7 +385,63 @@ class LinkProSyncService
             return 0;
         }
 
-        $ids = array_map(fn ($v) => (int) $v->id, $vendas);
+        $criadas = $this->processarVendasExternas($vendas, $origem, $conexao);
+
+        // Cursor avança até a última venda do lote independente de ter
+        // criado Venda ou não (já existia, item não mapeou etc.) — do
+        // contrário uma venda "travada" (ex.: produto que nunca vai casar)
+        // seria retentada pra sempre a cada minuto.
+        $conexao->ultimo_id_processado = (int) end($vendas)->id;
+        $conexao->save();
+
+        return $criadas;
+    }
+
+    /**
+     * Busca vendas que já batem com a regra atual (venda=true + NFC-e
+     * Autorizada) num intervalo de datas, sem depender do cursor
+     * incremental (ultimo_id_processado) — pega tanto venda nova quanto
+     * venda antiga que ficou de fora por causa de uma regra velha ou de um
+     * bug já corrigido. Não mexe no cursor real do sync:lojas: rodar isso
+     * não atrapalha nem duplica o que a sincronização de cada minuto já fez
+     * (idempotente por uuid, igual sincronizarVendas).
+     */
+    public function recuperarVendas(SyncConexao $conexao, string $desde, ?string $ate = null): SyncExecucao
+    {
+        $ate ??= now()->addDay()->format('Y-m-d');
+
+        return $this->executar($conexao, 'recuperacao_manual', function (Connection $origem) use ($conexao, $desde, $ate) {
+            $encontradas = 0;
+            $sincronizadas = 0;
+            $ultimoIdLocal = 0;
+
+            while (true) {
+                $vendas = $origem->select(self::QUERY_VENDAS_RECUPERACAO, [$ultimoIdLocal, $desde, $ate]);
+                if (empty($vendas)) {
+                    break;
+                }
+
+                $encontradas += count($vendas);
+                $sincronizadas += $this->processarVendasExternas($vendas, $origem, $conexao);
+                $ultimoIdLocal = (int) end($vendas)->id;
+            }
+
+            $this->avisos[] = "Recuperação manual ({$desde} a {$ate}): {$encontradas} venda(s) encontrada(s) batendo com a regra atual, {$sincronizadas} sincronizada(s) agora (o resto já existia).";
+
+            return [$sincronizadas, 0];
+        });
+    }
+
+    /**
+     * Processa um lote de vendas externas já buscadas (itens, pagamentos,
+     * cálculo de desconto, dedupe por uuid) — comum a sincronizarVendas()
+     * (incremental, a cada minuto) e recuperarVendas() (manual, sob
+     * demanda). Retorna quantas vendas foram criadas de fato (as que já
+     * existiam por uuid não contam).
+     */
+    private function processarVendasExternas(array $vendasExternas, Connection $origem, SyncConexao $conexao): int
+    {
+        $ids = array_map(fn ($v) => (int) $v->id, $vendasExternas);
         $idsPg = '{'.implode(',', $ids).'}';
 
         $itensPorVenda = collect($origem->select(self::QUERY_ITENS, [$idsPg]))->groupBy('venda_id');
@@ -372,9 +457,9 @@ class LinkProSyncService
             );
 
         $usuario = $this->usuarioResponsavel();
-        $processadas = 0;
+        $criadas = 0;
 
-        foreach ($vendas as $vendaExterna) {
+        foreach ($vendasExternas as $vendaExterna) {
             $itens = [];
 
             foreach ($itensPorVenda->get($vendaExterna->id, []) as $item) {
@@ -394,7 +479,6 @@ class LinkProSyncService
 
             if (empty($itens)) {
                 $this->avisos[] = "Venda externa #{$vendaExterna->id}: nenhum item pôde ser mapeado, venda ignorada.";
-                $conexao->ultimo_id_processado = $vendaExterna->id;
 
                 continue;
             }
@@ -445,15 +529,11 @@ class LinkProSyncService
                     $subtotal,
                     $desconto,
                 );
+                $criadas++;
             }
-
-            $processadas++;
-            $conexao->ultimo_id_processado = $vendaExterna->id;
         }
 
-        $conexao->save();
-
-        return $processadas;
+        return $criadas;
     }
 
     private function registrarVenda(

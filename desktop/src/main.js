@@ -331,8 +331,26 @@ process.on("uncaughtException", relatarErroFatal);
 app.on("before-quit", () => {
   isQuitting = true;
   pararReassertTopmost();
-  if (serverProcess) serverProcess.kill();
+  matarServidorEmbutido();
 });
+
+// O servidor Next embutido roda com o MESMO executável do app (spawn de
+// process.execPath com ELECTRON_RUN_AS_NODE=1) — no Gerenciador de Tarefas
+// e pra qualquer ferramenta que cheque "está rodando?" (como o instalador
+// NSIS antes de atualizar), ele aparece como outro "Ferro Cianorte.exe".
+// serverProcess.kill() sozinho não é confiável no Windows pra matar esse
+// tipo de processo filho — ele pode sobreviver ao "Sair" e deixar o
+// instalador travado achando que o app ainda está aberto. taskkill /t
+// (árvore inteira) /f (força) garante que morre de verdade.
+function matarServidorEmbutido() {
+  if (!serverProcess || !serverProcess.pid) return;
+
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(serverProcess.pid), "/f", "/t"]);
+  } else {
+    serverProcess.kill();
+  }
+}
 
 app.on("window-all-closed", () => {
   // Minimizar pra bolha não fecha o processo (ver mainWindow "close" acima);

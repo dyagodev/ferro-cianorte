@@ -5,6 +5,15 @@ const fs = require("fs");
 const net = require("net");
 const { spawn } = require("child_process");
 
+// Janela transparente (bolha, sempre no topo) + compositor do Windows em
+// certas placas de vídeo/drivers causa um artefato visual conhecido: outras
+// janelas do app (inclusive os modais do PDV) ficam parcialmente
+// transparentes, deixando a área de trabalho aparecer por trás. Desativar
+// aceleração de hardware é a correção padrão pra esse tipo de bug do
+// Electron/Chromium no Windows — sem isso, quem tem GPU/driver afetado vê o
+// papel de parede vazando através da janela principal.
+app.disableHardwareAcceleration();
+
 const BUBBLE_SIZE = 72;
 const PROD_API_URL = "https://ferro.dmtecnologia.com/api";
 const ICON_PATH = path.join(__dirname, "..", "assets", "icon.png");
@@ -25,7 +34,11 @@ function createSplashWindow() {
     width: 420,
     height: 320,
     frame: false,
-    transparent: true,
+    // Sem transparent:true de propósito — o cartão branco arredondado já é
+    // desenhado no próprio splash.html; janela transparente a mais só
+    // aumenta o risco do bug de composição do Windows (ver
+    // disableHardwareAcceleration acima).
+    backgroundColor: "#ffffff",
     resizable: false,
     movable: false,
     alwaysOnTop: true,

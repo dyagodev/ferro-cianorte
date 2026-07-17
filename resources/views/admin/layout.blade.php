@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('titulo', 'Admin') — Ferro Cianorte</title>
+    <title>@yield('titulo', 'Admin') — DM Nexus</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -76,9 +76,14 @@
 <body>
     <header>
         <div style="display:flex; gap:20px; align-items:center;">
-            <a href="{{ route('admin.sync-conexoes.index') }}">Admin — Ferro Cianorte</a>
-            <a href="{{ route('admin.sync-conexoes.index') }}" style="font-weight:400; color:#cbd5e1;">Sincronização</a>
-            <a href="{{ route('admin.usuarios.index') }}" style="font-weight:400; color:#cbd5e1;">Usuários</a>
+            @if (auth()->check() && auth()->user()->isSuperAdmin())
+                <a href="{{ route('admin.empresas.index') }}">Admin — DM Tecnologia</a>
+                <a href="{{ route('admin.empresas.index') }}" style="font-weight:400; color:#cbd5e1;">Empresas</a>
+            @else
+                <a href="{{ route('admin.sync-conexoes.index') }}">Admin — DM Nexus</a>
+                <a href="{{ route('admin.sync-conexoes.index') }}" style="font-weight:400; color:#cbd5e1;">Sincronização</a>
+                <a href="{{ route('admin.usuarios.index') }}" style="font-weight:400; color:#cbd5e1;">Usuários</a>
+            @endif
         </div>
         @auth
             <form method="POST" action="{{ route('admin.logout') }}">

@@ -31,6 +31,15 @@ class User extends Authenticatable
     }
 
     /**
+     * super_admin é da DM Tecnologia (dona do produto), não de uma empresa
+     * cliente — só ele cadastra empresa nova. Não tem acesso de venda/PDV.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

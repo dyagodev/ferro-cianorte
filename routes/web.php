@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\EmpresaController;
 use App\Http\Controllers\Admin\SyncConexaoController;
 use App\Http\Controllers\Admin\UsuarioController;
 use Illuminate\Support\Facades\Route;
@@ -24,5 +25,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->parameters(['sync-conexoes' => 'syncConexao']);
 
         Route::resource('usuarios', UsuarioController::class)->except(['show']);
+    });
+
+    // super_admin é da DM Tecnologia, não de uma empresa cliente — só ele
+    // cadastra empresa nova (ver EmpresaController).
+    Route::middleware(['auth', 'role:super_admin'])->group(function () {
+        Route::resource('empresas', EmpresaController::class)->except(['show']);
     });
 });

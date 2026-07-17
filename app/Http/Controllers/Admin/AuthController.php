@@ -12,7 +12,7 @@ class AuthController extends Controller
     public function showLoginForm()
     {
         if (Auth::check()) {
-            return redirect()->route('admin.sync-conexoes.index');
+            return redirect()->to($this->rotaInicial(Auth::user()));
         }
 
         return view('admin.auth.login');
@@ -29,7 +29,8 @@ class AuthController extends Controller
             return back()->withErrors(['email' => 'Credenciais inválidas.'])->onlyInput('email');
         }
 
-        if (! Auth::user()->isAdmin()) {
+        $usuario = Auth::user();
+        if (! $usuario->isAdmin() && ! $usuario->isSuperAdmin()) {
             Auth::logout();
 
             return back()->withErrors(['email' => 'Acesso restrito a administradores.'])->onlyInput('email');
@@ -37,7 +38,14 @@ class AuthController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('admin.sync-conexoes.index'));
+        return redirect()->intended($this->rotaInicial($usuario));
+    }
+
+    // super_admin (DM Tecnologia) não tem acesso à tela de sincronização —
+    // aquilo é operacional de uma empresa cliente específica.
+    private function rotaInicial($usuario): string
+    {
+        return $usuario->isSuperAdmin() ? route('admin.empresas.index') : route('admin.sync-conexoes.index');
     }
 
     public function logout(Request $request): RedirectResponse

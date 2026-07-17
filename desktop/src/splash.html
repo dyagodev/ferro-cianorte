@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DM Nexus</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      .cartao {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+      }
+
+      .logo {
+        width: 200px;
+        height: auto;
+        opacity: 0;
+        animation: aparecer 0.5s ease-out 0.1s forwards;
+      }
+
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 3px solid #e2e8f0;
+        border-top-color: #2563eb;
+        animation: girar 0.8s linear infinite;
+      }
+
+      .frase {
+        min-height: 20px;
+        font-size: 13px;
+        color: #64748b;
+        text-align: center;
+        padding: 0 24px;
+        transition: opacity 0.25s ease;
+      }
+
+      @keyframes girar {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes aparecer {
+        to {
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="cartao">
+      <img class="logo" src="../assets/logo_dm_nexus.png" alt="DM Nexus" />
+      <div class="spinner"></div>
+      <p class="frase" id="frase"></p>
+    </div>
+
+    <script>
+      const frases = [
+        "Conectando ao caixa...",
+        "Sincronizando vendas...",
+        "Carregando catálogo de produtos...",
+        "Verificando estoque das lojas...",
+        "Preparando o PDV...",
+        "Quase lá...",
+      ];
+
+      const elFrase = document.getElementById("frase");
+      let indice = 0;
+
+      function mostrarProximaFrase() {
+        elFrase.style.opacity = "0";
+        setTimeout(() => {
+          elFrase.textContent = frases[indice % frases.length];
+          elFrase.style.opacity = "1";
+          indice++;
+        }, 250);
+      }
+
+      mostrarProximaFrase();
+      setInterval(mostrarProximaFrase, 1600);
+    </script>
+  </body>
+</html>

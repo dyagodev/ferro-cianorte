@@ -1,4 +1,5 @@
 const { app, BrowserWindow, screen, ipcMain, Menu, dialog } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const fs = require("fs");
 const net = require("net");
@@ -13,10 +14,36 @@ const SERVER_LOG_FILE = path.join(app.getPath("userData"), "server.log");
 
 let bubbleWindow = null;
 let mainWindow = null;
+let splashWindow = null;
 let serverProcess = null;
 let serverUrl = null;
 let isQuitting = false;
 let reassertTopmostInterval = null;
+
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 420,
+    height: 320,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    icon: ICON_PATH,
+  });
+
+  splashWindow.loadFile(path.join(__dirname, "splash.html"));
+  splashWindow.once("ready-to-show", () => splashWindow?.show());
+}
+
+function fecharSplashWindow() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+  }
+  splashWindow = null;
+}
 
 function readJson(file, fallback) {
   try {
@@ -153,7 +180,7 @@ ipcMain.on("bubble:move", (_event, { x, y }) => {
 });
 ipcMain.on("bubble:context-menu", () => {
   const menu = Menu.buildFromTemplate([
-    { label: "Abrir Ferro Cianorte", click: showMain },
+    { label: "Abrir DM Nexus", click: showMain },
     { type: "separator" },
     {
       label: "Sair",
@@ -176,6 +203,56 @@ ipcMain.on("app:close", () => {
   app.quit();
 });
 ipcMain.handle("app:platform", () => process.platform);
+ipcMain.handle("app:versao", () => app.getVersion());
+
+// Auto-atualização: só faz sentido pra quem instalou pelo NSIS (Setup.exe)
+// — o portátil não tem como se autoatualizar (não existe "instalação" pra
+// sobrescrever). autoUpdater.checkForUpdates() lança um erro nesse caso
+// (não acha app-update.yml dentro do pacote); o catch trata isso como um
+// resultado normal ("sem suporte"), não como falha de verdade.
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function enviarStatusAtualizacao(status) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:status", status);
+  }
+}
+
+autoUpdater.on("checking-for-update", () => enviarStatusAtualizacao({ estado: "verificando" }));
+autoUpdater.on("update-available", (info) => enviarStatusAtualizacao({ estado: "disponivel", versao: info.version }));
+autoUpdater.on("update-not-available", () => enviarStatusAtualizacao({ estado: "atualizado" }));
+autoUpdater.on("download-progress", (progresso) =>
+  enviarStatusAtualizacao({ estado: "baixando", percentual: Math.round(progresso.percent) }),
+);
+autoUpdater.on("update-downloaded", (info) => enviarStatusAtualizacao({ estado: "pronto", versao: info.version }));
+autoUpdater.on("error", (erro) => enviarStatusAtualizacao({ estado: "erro", mensagem: erro.message }));
+
+ipcMain.handle("app:verificar-atualizacao", async () => {
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (erro) {
+    enviarStatusAtualizacao({ estado: "erro", mensagem: erro.message });
+  }
+});
+
+// quitAndInstall() dispara app.quit() por baixo dos panos, que manda
+// "close" pra mainWindow — sem isQuitting=true antes, o handler de close
+// (linha abaixo, showBubble()) engoliria o fechamento e a instalação nunca
+// aconteceria de verdade.
+ipcMain.handle("app:instalar-atualizacao", () => {
+  isQuitting = true;
+  autoUpdater.quitAndInstall();
+});
+
+// Verifica ao abrir (com um atraso pra não competir com o carregamento
+// inicial) e depois a cada 4h — o app costuma ficar aberto dias seguidos
+// (abre com o Windows, nunca fecha sozinho), então não dá pra confiar só
+// na checagem do startup.
+function iniciarChecagemPeriodicaDeAtualizacao() {
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 30_000);
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+}
 
 // Imprime a página atual direto na impressora padrão do Windows, sem o
 // diálogo nativo de impressão (que pede confirmação a cada venda) — usa a
@@ -298,7 +375,7 @@ function relatarErroFatal(erro) {
     // Se nem o log deu pra escrever, não tem mais o que fazer — só mostra o diálogo.
   }
   dialog.showErrorBox(
-    "Ferro Cianorte não conseguiu iniciar",
+    "DM Nexus não conseguiu iniciar",
     `Ocorreu um erro ao abrir o app:\n\n${erro?.message ?? erro}\n\nDetalhes em: ${SERVER_LOG_FILE}`,
   );
   app.quit();
@@ -308,13 +385,21 @@ app.whenReady().then(async () => {
   try {
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
+    // Mostra a splash na hora — o resto (subir o servidor embutido, carregar
+    // a janela principal) leva alguns segundos, e sem isso a primeira
+    // impressão é o Windows não mostrando nada por um tempo.
+    createSplashWindow();
+
     await startEmbeddedServer();
     await createMainWindow();
     createBubbleWindow();
+    fecharSplashWindow();
 
     // Sempre começa como bolha flutuante, tanto no login automático quanto ao
     // abrir manualmente — a janela cheia só some (fica em memória) até expandir.
     showBubble();
+
+    if (app.isPackaged) iniciarChecagemPeriodicaDeAtualizacao();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -322,6 +407,7 @@ app.whenReady().then(async () => {
       }
     });
   } catch (erro) {
+    fecharSplashWindow();
     relatarErroFatal(erro);
   }
 });
@@ -337,7 +423,7 @@ app.on("before-quit", () => {
 // O servidor Next embutido roda com o MESMO executável do app (spawn de
 // process.execPath com ELECTRON_RUN_AS_NODE=1) — no Gerenciador de Tarefas
 // e pra qualquer ferramenta que cheque "está rodando?" (como o instalador
-// NSIS antes de atualizar), ele aparece como outro "Ferro Cianorte.exe".
+// NSIS antes de atualizar), ele aparece como outro "DM Nexus.exe".
 // serverProcess.kill() sozinho não é confiável no Windows pra matar esse
 // tipo de processo filho — ele pode sobreviver ao "Sair" e deixar o
 // instalador travado achando que o app ainda está aberto. taskkill /t

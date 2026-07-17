@@ -9,12 +9,12 @@ import {
   Printer,
   ScanBarcode,
   Search,
-  ShoppingBag,
   ShoppingCart,
   Trash2,
   UserRound,
   XCircle,
 } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
@@ -75,7 +75,7 @@ export default function PdvScreen({
   }, [role]);
 
   const lojaId = role === "admin" ? lojaSelecionadaId : lojaIdSessao;
-  const lojaNome = lojas.find((loja) => loja.id === lojaId)?.nome ?? "Ferro Cianorte";
+  const lojaNome = lojas.find((loja) => loja.id === lojaId)?.nome ?? "DM Nexus";
 
   const subtotal = useMemo(
     () => carrinho.reduce((soma, item) => soma + item.quantidade * item.precoVendido, 0),
@@ -274,12 +274,17 @@ export default function PdvScreen({
 
   return (
     <>
-    <div className="flex flex-1 flex-col bg-white print:hidden">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2">
-        <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-          <ShoppingBag className="h-5 w-5 text-blue-600" />
-          Ferro Cianorte
-        </h1>
+    <div className="relative flex flex-1 flex-col bg-white print:hidden">
+      <Image
+        src="/logo-dm-nexus.png"
+        alt=""
+        width={1228}
+        height={235}
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/2 w-[840px] max-w-[85%] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.035]"
+      />
+      <header className="relative z-10 flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2">
+        <Image src="/logo-dm-nexus.png" alt="DM Nexus" width={1228} height={235} className="h-9 w-auto" priority />
         <div className="flex items-center gap-3 text-sm text-slate-600">
           {role === "admin" && (
             <select
@@ -313,7 +318,7 @@ export default function PdvScreen({
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col gap-4 p-4">
+      <main className="relative z-10 flex flex-1 flex-col gap-4 p-4">
         <div className="relative">
           <label className="mb-1 block text-sm text-slate-500">Código de barras ou descrição</label>
           <div className="relative">

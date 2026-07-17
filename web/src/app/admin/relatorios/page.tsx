@@ -125,7 +125,7 @@ export default function RelatoriosPage() {
 
       <div className="relatorio-impressao">
         <div className="mb-4 hidden print:block">
-          <h1 className="text-xl font-bold">Ferro Cianorte — {tituloAba}</h1>
+          <h1 className="text-xl font-bold">DM Nexus — {tituloAba}</h1>
           <p className="text-sm">Loja: {lojaNome}</p>
           {aba !== "estoque" && (
             <p className="text-sm">

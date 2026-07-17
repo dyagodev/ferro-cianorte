@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, Lock, LogIn, Mail, ShoppingBag } from "lucide-react";
+import { AlertCircle, Lock, LogIn, Mail } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -44,12 +45,7 @@ export default function LoginForm() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-lg border border-slate-200 bg-slate-50 p-8 shadow-xl"
       >
-        <div className="mb-1 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600">
-            <ShoppingBag className="h-5 w-5 text-white" />
-          </div>
-          <h1 className="text-2xl font-semibold text-slate-900">Ferro Cianorte</h1>
-        </div>
+        <Image src="/logo-dm-nexus.png" alt="DM Nexus" width={1228} height={235} className="mb-1 h-auto w-56" priority />
         <p className="mb-6 text-sm text-slate-500">Entre com seu usuário para acessar o caixa.</p>
 
         <label className="mb-1 block text-sm text-slate-600" htmlFor="email">

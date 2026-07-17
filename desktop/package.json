@@ -1,8 +1,8 @@
 {
   "name": "ferro-cianorte-desktop",
-  "version": "1.5.11",
+  "version": "1.6.0",
   "private": true,
-  "description": "Ferro Cianorte — app desktop (bolha flutuante) para Windows e Mac",
+  "description": "DM Nexus — app desktop (bolha flutuante) para Windows e Mac",
   "author": "DM Tecnologia",
   "main": "src/main.js",
   "scripts": {
@@ -17,12 +17,16 @@
     "electron-builder": "^25.1.0"
   },
   "build": {
-    "appId": "com.dmtecnologia.ferrocianorte",
-    "productName": "Ferro Cianorte",
+    "appId": "com.dmtecnologia.dmnexus",
+    "productName": "DM Nexus",
     "directories": {
       "output": "release"
     },
-    "files": ["src/**/*", "assets/**/*"],
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
     "icon": "assets/icon.png",
     "extraResources": [
       {
@@ -30,14 +34,28 @@
         "to": "web-standalone"
       }
     ],
+    "publish": {
+      "provider": "generic",
+      "url": "https://ferro.dmtecnologia.com/desktop-updates/"
+    },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.business"
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "portable": {
@@ -49,5 +67,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

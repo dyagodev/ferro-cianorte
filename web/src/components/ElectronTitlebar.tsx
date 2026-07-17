@@ -3,6 +3,14 @@
 import { Minus, Square, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+export type StatusAtualizacao =
+  | { estado: "verificando" }
+  | { estado: "disponivel"; versao: string }
+  | { estado: "baixando"; percentual: number }
+  | { estado: "pronto"; versao: string }
+  | { estado: "atualizado" }
+  | { estado: "erro"; mensagem: string };
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -11,6 +19,10 @@ declare global {
       toggleMaximize: () => void;
       platform: () => Promise<string>;
       imprimirSilencioso: () => Promise<{ success: boolean; failureReason?: string }>;
+      versaoApp: () => Promise<string>;
+      verificarAtualizacao: () => Promise<void>;
+      instalarAtualizacao: () => Promise<void>;
+      onStatusAtualizacao: (callback: (status: StatusAtualizacao) => void) => () => void;
     };
   }
 }
@@ -33,7 +45,7 @@ export function ElectronTitlebar() {
       className="flex h-9 shrink-0 items-center justify-between bg-slate-900 pl-3 text-white print:hidden"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
-      <span className="text-xs font-medium tracking-wide text-slate-300">Ferro Cianorte</span>
+      <span className="text-xs font-medium tracking-wide text-slate-300">DM Nexus</span>
       <div className="flex h-full" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <button
           type="button"

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ferro Cianorte",
+  title: "DM Nexus",
   description: "Sistema de ponto de venda multiloja",
 };
 

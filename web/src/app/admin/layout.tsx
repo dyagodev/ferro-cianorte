@@ -10,6 +10,7 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -31,8 +32,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <header className="border-b border-slate-200 bg-slate-50 px-4 py-2 print:hidden">
         <div className="flex items-center justify-between">
           <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <ShoppingBag className="h-5 w-5 text-blue-600" />
-            Ferro Cianorte — Administrativo
+            <Image src="/logo-dm-nexus.png" alt="DM Nexus" width={1228} height={235} className="h-9 w-auto" priority />
+            <span className="text-slate-400">—</span> Administrativo
           </h1>
           <Link
             href="/pdv"

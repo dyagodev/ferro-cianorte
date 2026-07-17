@@ -6,12 +6,14 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
+  DownloadCloud,
   LayoutDashboard,
   ListChecks,
   Lock,
   Menu as MenuIcon,
   Printer,
   ReceiptText,
+  RefreshCw,
   Unlock,
   X,
 } from "lucide-react";
@@ -19,6 +21,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/apiClient";
 import { imprimir } from "@/lib/imprimir";
+import type { StatusAtualizacao } from "@/components/ElectronTitlebar";
 import type { FormaPagamento, Venda } from "@/lib/types";
 import Cupom, { type VendaConcluida } from "./cupom";
 
@@ -177,6 +180,8 @@ export default function MenuModal({
                 Área Administrativa
               </a>
             )}
+
+            <AtualizacaoApp />
           </div>
         )}
 
@@ -195,6 +200,62 @@ export default function MenuModal({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function AtualizacaoApp() {
+  const [versao, setVersao] = useState<string | null>(null);
+  const [status, setStatus] = useState<StatusAtualizacao | null>(null);
+  const [disponivel, setDisponivel] = useState(false);
+
+  useEffect(() => {
+    if (!window.electronAPI?.isElectron) return;
+
+    setDisponivel(true);
+    window.electronAPI.versaoApp().then(setVersao);
+
+    return window.electronAPI.onStatusAtualizacao(setStatus);
+  }, []);
+
+  if (!disponivel) return null;
+
+  const verificando = status?.estado === "verificando";
+
+  return (
+    <div className="mt-2 rounded border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+      <div className="flex items-center justify-between">
+        <span>Versão {versao ?? "..."}</span>
+        {status?.estado === "pronto" ? (
+          <button
+            onClick={() => window.electronAPI?.instalarAtualizacao()}
+            className="flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+          >
+            <DownloadCloud className="h-3.5 w-3.5" />
+            Reiniciar e atualizar
+          </button>
+        ) : (
+          <button
+            onClick={() => window.electronAPI?.verificarAtualizacao()}
+            disabled={verificando}
+            className="flex items-center gap-1.5 rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${verificando ? "animate-spin" : ""}`} />
+            Verificar atualização
+          </button>
+        )}
+      </div>
+
+      {status && (
+        <p className="mt-1.5 text-xs text-slate-500">
+          {status.estado === "verificando" && "Verificando atualização..."}
+          {status.estado === "disponivel" && `Baixando atualização v${status.versao}...`}
+          {status.estado === "baixando" && `Baixando... ${status.percentual}%`}
+          {status.estado === "pronto" && `Atualização v${status.versao} pronta para instalar.`}
+          {status.estado === "atualizado" && "Você já está na versão mais recente."}
+          {status.estado === "erro" && `Não foi possível verificar: ${status.mensagem}`}
+        </p>
+      )}
     </div>
   );
 }

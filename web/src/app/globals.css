@@ -27,3 +27,19 @@ body {
     border-color: #999 !important;
   }
 }
+
+/* Barra de progresso de atualização do app desktop (UpdateProgressBar) —
+   estado indeterminado (verificando/baixando antes de saber o %), mesma
+   ideia da barra de carregamento de página do YouTube. */
+@keyframes update-bar-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.animate-update-bar {
+  animation: update-bar-slide 1.2s ease-in-out infinite;
+}

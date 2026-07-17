@@ -283,7 +283,7 @@ export default function PdvScreen({
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-1/2 w-[840px] max-w-[85%] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.035]"
       />
-      <header className="relative z-10 flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2">
+      <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2">
         <Image src="/logo-dm-nexus.png" alt="DM Nexus" width={1228} height={235} className="h-9 w-auto" priority />
         <div className="flex items-center gap-3 text-sm text-slate-600">
           {role === "admin" && (
@@ -318,7 +318,7 @@ export default function PdvScreen({
         </div>
       </header>
 
-      <main className="relative z-10 flex flex-1 flex-col gap-4 p-4">
+      <main className="flex flex-1 flex-col gap-4 p-4">
         <div className="relative">
           <label className="mb-1 block text-sm text-slate-500">Código de barras ou descrição</label>
           <div className="relative">

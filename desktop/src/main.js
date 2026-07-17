@@ -5,15 +5,6 @@ const fs = require("fs");
 const net = require("net");
 const { spawn } = require("child_process");
 
-// Janela transparente (bolha, sempre no topo) + compositor do Windows em
-// certas placas de vídeo/drivers causa um artefato visual conhecido: outras
-// janelas do app (inclusive os modais do PDV) ficam parcialmente
-// transparentes, deixando a área de trabalho aparecer por trás. Desativar
-// aceleração de hardware é a correção padrão pra esse tipo de bug do
-// Electron/Chromium no Windows — sem isso, quem tem GPU/driver afetado vê o
-// papel de parede vazando através da janela principal.
-app.disableHardwareAcceleration();
-
 const BUBBLE_SIZE = 72;
 const PROD_API_URL = "https://ferro.dmtecnologia.com/api";
 const ICON_PATH = path.join(__dirname, "..", "assets", "icon.png");
@@ -154,6 +145,12 @@ async function createMainWindow() {
     show: false,
     frame: false,
     backgroundColor: "#ffffff",
+    // Windows 11 aplica Mica (efeito de vidro fosco, misturando o papel de
+    // parede) automaticamente em janela sem moldura (frame: false) — é
+    // exatamente o vazamento visual reportado (área de trabalho aparecendo
+    // atrás dos modais). "none" desliga esse material e força a janela a
+    // ficar opaca de verdade, respeitando o backgroundColor acima.
+    backgroundMaterial: "none",
     icon: ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

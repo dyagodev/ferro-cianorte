@@ -26,6 +26,7 @@ export type Loja = {
 export type FormaPagamento =
   | "boleto"
   | "cartao"
+  | "cartao_debito"
   | "dinheiro"
   | "cheque"
   | "crediario"
@@ -66,10 +67,11 @@ export type Venda = {
   pagamentos: VendaPagamento[];
 };
 
-// Ordem e teclas idênticas à tela de referência: B-Boleto C-Cartão D-Dinheiro H-Cheque N-Crediário P-Pix A-A Prazo O-Outros
+// Ordem e teclas idênticas à tela de referência: B-Boleto C-Cartão Crédito D-Dinheiro H-Cheque N-Crediário P-Pix A-A Prazo O-Outros V-Cartão Débito
 export const FORMAS_PAGAMENTO: { valor: FormaPagamento; rotulo: string; tecla: string }[] = [
   { valor: "boleto", rotulo: "Boleto", tecla: "B" },
-  { valor: "cartao", rotulo: "Cartão", tecla: "C" },
+  { valor: "cartao", rotulo: "Cartão Crédito", tecla: "C" },
+  { valor: "cartao_debito", rotulo: "Cartão Débito", tecla: "V" },
   { valor: "dinheiro", rotulo: "Dinheiro", tecla: "D" },
   { valor: "cheque", rotulo: "Cheque", tecla: "H" },
   { valor: "crediario", rotulo: "Crediário", tecla: "N" },

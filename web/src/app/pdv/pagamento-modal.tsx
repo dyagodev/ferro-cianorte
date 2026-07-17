@@ -23,6 +23,7 @@ type Pagamento = { forma_pagamento: FormaPagamento; valor: number };
 const ICONES_FORMA_PAGAMENTO: Record<FormaPagamento, LucideIcon> = {
   boleto: FileText,
   cartao: CreditCard,
+  cartao_debito: CreditCard,
   dinheiro: Banknote,
   cheque: HandCoins,
   crediario: HandCoins,

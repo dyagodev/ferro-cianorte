@@ -15,7 +15,8 @@ export type VendaConcluida = {
 
 const ROTULO_FORMA_PAGAMENTO: Record<FormaPagamento, string> = {
   boleto: "Boleto",
-  cartao: "Cartão",
+  cartao: "Cartão Crédito",
+  cartao_debito: "Cartão Débito",
   dinheiro: "Dinheiro",
   cheque: "Cheque",
   crediario: "Crediário",

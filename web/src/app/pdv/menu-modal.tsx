@@ -42,7 +42,8 @@ type Situacao = {
 
 const ROTULO_FORMA: Record<FormaPagamento, string> = {
   boleto: "Boleto",
-  cartao: "Cartão",
+  cartao: "Cartão Crédito",
+  cartao_debito: "Cartão Débito",
   dinheiro: "Dinheiro",
   cheque: "Cheque",
   crediario: "Crediário",

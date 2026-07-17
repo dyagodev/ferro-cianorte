@@ -178,6 +178,7 @@ function nomeVendedor(venda: VendaResumo): string {
 const CORES_FORMA: Record<string, string> = {
   boleto: "bg-amber-100 text-amber-800 border-amber-200",
   cartao: "bg-blue-100 text-blue-800 border-blue-200",
+  cartao_debito: "bg-indigo-100 text-indigo-800 border-indigo-200",
   dinheiro: "bg-emerald-100 text-emerald-800 border-emerald-200",
   cheque: "bg-purple-100 text-purple-800 border-purple-200",
   crediario: "bg-orange-100 text-orange-800 border-orange-200",
@@ -438,7 +439,8 @@ function VendaDetalheModal({ venda, onFechar }: { venda: VendaResumo; onFechar: 
 
 const ROTULO_FORMA: Record<FormaPagamento, string> = {
   boleto: "Boleto",
-  cartao: "Cartão",
+  cartao: "Cartão Crédito",
+  cartao_debito: "Cartão Débito",
   dinheiro: "Dinheiro",
   cheque: "Cheque",
   crediario: "Crediário",

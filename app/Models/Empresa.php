@@ -2,16 +2,15 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToEmpresa;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['nome', 'cnpj', 'endereco', 'ativo'])]
-class Loja extends Model
+#[Fillable(['nome', 'ativo'])]
+class Empresa extends Model
 {
-    use BelongsToEmpresa, HasFactory;
+    use HasFactory;
 
     protected function casts(): array
     {
@@ -20,18 +19,28 @@ class Loja extends Model
         ];
     }
 
+    public function lojas(): HasMany
+    {
+        return $this->hasMany(Loja::class);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
     }
 
-    public function produtoEstoques(): HasMany
+    public function produtos(): HasMany
     {
-        return $this->hasMany(ProdutoEstoque::class);
+        return $this->hasMany(Produto::class);
     }
 
-    public function vendas(): HasMany
+    public function clientes(): HasMany
     {
-        return $this->hasMany(Venda::class);
+        return $this->hasMany(Cliente::class);
+    }
+
+    public function fornecedores(): HasMany
+    {
+        return $this->hasMany(Fornecedor::class);
     }
 }

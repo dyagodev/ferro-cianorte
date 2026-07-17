@@ -7,6 +7,7 @@ use App\Models\SyncConexao;
 use App\Models\SyncExecucao;
 use App\Models\User;
 use App\Models\Venda;
+use App\Support\TenantContext;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -324,6 +325,14 @@ class LinkProSyncService
         $this->avisos = [];
         $nomeConexao = "sync_origem_{$conexao->id}";
 
+        // Sync roda em background (comando agendado), sem usuário
+        // autenticado pro Global Scope de empresa herdar — tem que setar
+        // explicitamente qual empresa essa conexão pertence (via a loja
+        // dela), senão garantirProduto() casaria/criaria produto pelo
+        // codigo_interno em TODAS as empresas, misturando catálogo de
+        // clientes diferentes.
+        TenantContext::set($conexao->loja->empresa_id);
+
         try {
             $origem = $this->conectar($conexao, $nomeConexao);
 
@@ -352,6 +361,7 @@ class LinkProSyncService
             ]);
         } finally {
             DB::purge($nomeConexao);
+            TenantContext::clear();
         }
 
         return $execucao->fresh();

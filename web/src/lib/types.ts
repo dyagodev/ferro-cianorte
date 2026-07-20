@@ -5,8 +5,25 @@ export type Produto = {
   descricao: string;
   unidade: string;
   preco_venda: string;
+  grupo_fiscal_id: number | null;
+  grupo_fiscal?: GrupoFiscal | null;
   quantidade_estoque?: number | string;
   estoques?: { loja_id: number; quantidade: number | string }[];
+};
+
+export type GrupoFiscal = {
+  id: number;
+  nome: string;
+  ncm: string | null;
+  cfop_dentro_estado: string | null;
+  cfop_fora_estado: string | null;
+  csosn: string | null;
+  cst_icms: string | null;
+  aliquota_icms: string | null;
+  cst_pis: string | null;
+  aliquota_pis: string | null;
+  cst_cofins: string | null;
+  aliquota_cofins: string | null;
 };
 
 export type Cliente = {

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['nome', 'ativo'])]
+#[Fillable(['nome', 'ativo', 'regime_tributario'])]
 class Empresa extends Model
 {
     use HasFactory;
@@ -42,5 +42,10 @@ class Empresa extends Model
     public function fornecedores(): HasMany
     {
         return $this->hasMany(Fornecedor::class);
+    }
+
+    public function gruposFiscais(): HasMany
+    {
+        return $this->hasMany(GrupoFiscal::class);
     }
 }

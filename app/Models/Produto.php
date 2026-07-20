@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'subgrupo',
     'marca',
     'fornecedor_id',
+    'grupo_fiscal_id',
     'preco_custo',
     'margem_percentual',
     'preco_venda',
@@ -42,6 +43,11 @@ class Produto extends Model
     public function fornecedor(): BelongsTo
     {
         return $this->belongsTo(Fornecedor::class);
+    }
+
+    public function grupoFiscal(): BelongsTo
+    {
+        return $this->belongsTo(GrupoFiscal::class);
     }
 
     public function estoques(): HasMany

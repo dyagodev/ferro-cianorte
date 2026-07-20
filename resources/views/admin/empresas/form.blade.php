@@ -17,6 +17,15 @@
             @error('nome') <div class="erro">{{ $message }}</div> @enderror
 
             @if ($empresa->exists)
+                <label for="regime_tributario">Regime tributário</label>
+                <select id="regime_tributario" name="regime_tributario">
+                    <option value="simples_nacional" @selected(old('regime_tributario', $empresa->regime_tributario) === 'simples_nacional')>Simples Nacional</option>
+                    <option value="lucro_presumido" @selected(old('regime_tributario', $empresa->regime_tributario) === 'lucro_presumido')>Lucro Presumido</option>
+                    <option value="lucro_real" @selected(old('regime_tributario', $empresa->regime_tributario) === 'lucro_real')>Lucro Real</option>
+                </select>
+                <div class="ajuda">Define se os grupos fiscais dela usam CSOSN (Simples) ou CST (Presumido/Real).</div>
+                @error('regime_tributario') <div class="erro">{{ $message }}</div> @enderror
+
                 <div class="checkbox-row">
                     <input type="checkbox" id="ativo" name="ativo" value="1" @checked(old('ativo', $empresa->ativo))>
                     <label for="ativo" style="margin:0;">Empresa ativa</label>

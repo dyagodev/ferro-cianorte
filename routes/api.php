@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\EntregadorController;
 use App\Http\Controllers\Api\FornecedorController;
 use App\Http\Controllers\Api\FuncionarioController;
+use App\Http\Controllers\Api\GrupoFiscalController;
 use App\Http\Controllers\Api\LojaController;
 use App\Http\Controllers\Api\ProdutoController;
 use App\Http\Controllers\Api\RelatorioController;
@@ -50,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/clientes/{cliente}', [ClienteController::class, 'destroy']);
 
         Route::apiResource('fornecedores', FornecedorController::class);
+        Route::apiResource('grupos-fiscais', GrupoFiscalController::class)->parameters(['grupos-fiscais' => 'grupoFiscal']);
         Route::apiResource('funcionarios', FuncionarioController::class);
         Route::apiResource('entregadores', EntregadorController::class);
 

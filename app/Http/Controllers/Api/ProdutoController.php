@@ -49,6 +49,7 @@ class ProdutoController extends Controller
         if ($request->has('page')) {
             $paginado = $query->paginate($request->integer('per_page') ?: 30);
             $colecao = $paginado->getCollection();
+            $colecao->loadMissing('grupoFiscal');
         } else {
             $colecao = $query->get();
         }
@@ -76,7 +77,7 @@ class ProdutoController extends Controller
 
     public function show(Produto $produto)
     {
-        return $produto->load('estoques.loja', 'fornecedor');
+        return $produto->load('estoques.loja', 'fornecedor', 'grupoFiscal');
     }
 
     public function update(Request $request, Produto $produto)
@@ -124,6 +125,7 @@ class ProdutoController extends Controller
             'subgrupo' => ['nullable', 'string', 'max:255'],
             'marca' => ['nullable', 'string', 'max:255'],
             'fornecedor_id' => ['nullable', 'exists:fornecedores,id'],
+            'grupo_fiscal_id' => ['nullable', 'exists:grupos_fiscais,id'],
             'preco_custo' => ['nullable', 'numeric', 'min:0'],
             'margem_percentual' => ['nullable', 'numeric', 'min:0'],
             'preco_venda' => ['nullable', 'numeric', 'min:0'],

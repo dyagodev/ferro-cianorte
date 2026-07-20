@@ -4,6 +4,7 @@ import {
   BarChart3,
   LayoutDashboard,
   Package,
+  Receipt,
   ShoppingBag,
   Store,
   Truck,
@@ -20,6 +21,7 @@ const ABAS = [
   { href: "/admin/produtos", rotulo: "Produtos / Estoque", icone: Package },
   { href: "/admin/clientes", rotulo: "Clientes", icone: Users },
   { href: "/admin/fornecedores", rotulo: "Fornecedores", icone: Truck },
+  { href: "/admin/grupos-fiscais", rotulo: "Grupos Fiscais", icone: Receipt },
   { href: "/admin/funcionarios", rotulo: "Funcionários", icone: UsersRound },
   { href: "/admin/relatorios", rotulo: "Relatórios", icone: BarChart3 },
 ];

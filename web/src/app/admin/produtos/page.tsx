@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { CampoDinheiro } from "@/components/CampoDinheiro";
 import { ModalCadastro } from "@/components/ModalCadastro";
-import type { Loja, Produto } from "@/lib/types";
+import type { GrupoFiscal, Loja, Produto } from "@/lib/types";
 
 type EdicaoEstoque = { produtoId: number; lojaId: number };
 
@@ -21,6 +21,7 @@ const POR_PAGINA = 30;
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [lojas, setLojas] = useState<Loja[]>([]);
+  const [gruposFiscais, setGruposFiscais] = useState<GrupoFiscal[]>([]);
   const [pagina, setPagina] = useState(1);
   const [ultimaPagina, setUltimaPagina] = useState(1);
   const [total, setTotal] = useState(0);
@@ -35,6 +36,7 @@ export default function ProdutosPage() {
   const [margemPercentual, setMargemPercentual] = useState("");
   const [precoVenda, setPrecoVenda] = useState(0);
   const [estoqueMinimo, setEstoqueMinimo] = useState("");
+  const [grupoFiscalId, setGrupoFiscalId] = useState("");
 
   const [erro, setErro] = useState<string | null>(null);
   const [edicao, setEdicao] = useState<EdicaoEstoque | null>(null);
@@ -45,15 +47,17 @@ export default function ProdutosPage() {
     const query = new URLSearchParams({ page: String(paginaAlvo), per_page: String(POR_PAGINA) });
     if (buscaAlvo.trim()) query.set("q", buscaAlvo.trim());
 
-    const [produtosResp, lojasResp] = await Promise.all([
+    const [produtosResp, lojasResp, gruposFiscaisResp] = await Promise.all([
       apiFetch<PaginaProdutos>(`produtos?${query.toString()}`),
       apiFetch<Loja[]>("lojas"),
+      apiFetch<GrupoFiscal[]>("grupos-fiscais"),
     ]);
     setProdutos(produtosResp.data);
     setPagina(produtosResp.current_page);
     setUltimaPagina(produtosResp.last_page);
     setTotal(produtosResp.total);
     setLojas(lojasResp);
+    setGruposFiscais(gruposFiscaisResp);
   }
 
   useEffect(() => {
@@ -96,6 +100,7 @@ export default function ProdutosPage() {
           margem_percentual: Number(margemPercentual) || 0,
           preco_venda: precoVenda,
           estoque_minimo: Number(estoqueMinimo) || 0,
+          grupo_fiscal_id: grupoFiscalId ? Number(grupoFiscalId) : null,
         }),
       });
       setDescricao("");
@@ -106,6 +111,7 @@ export default function ProdutosPage() {
       setMargemPercentual("");
       setPrecoVenda(0);
       setEstoqueMinimo("");
+      setGrupoFiscalId("");
       setModalAberto(false);
       await carregar();
     } catch {
@@ -199,6 +205,7 @@ export default function ProdutosPage() {
             <tr className="divide-x divide-slate-200">
               <th className="px-3 py-2">Produto</th>
               <th className="px-3 py-2">Cod</th>
+              <th className="px-3 py-2">Grupo Fiscal</th>
               <th className="px-3 py-2">Preço</th>
               {lojasOrdenadas.map((loja) => (
                 <th key={loja.id} className="px-3 py-2">{loja.nome}</th>
@@ -210,7 +217,7 @@ export default function ProdutosPage() {
           <tbody>
             {produtos.length === 0 && (
               <tr>
-                <td colSpan={5 + lojas.length} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={6 + lojas.length} className="px-3 py-8 text-center text-slate-500">
                   Nenhum produto encontrado{busca ? ` para "${busca}"` : ""}.
                 </td>
               </tr>
@@ -219,6 +226,7 @@ export default function ProdutosPage() {
               <tr key={produto.id} className="divide-x divide-slate-200 border-t border-slate-200">
                 <td className="px-3 py-2">{produto.descricao}</td>
                 <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? "—"}</td>
+                <td className="px-3 py-2 text-slate-500">{produto.grupo_fiscal?.nome ?? "—"}</td>
                 <td className="px-3 py-2">R$ {Number(produto.preco_venda).toFixed(2)}</td>
                 {lojasOrdenadas.map((loja) => {
                   const quantidade = estoqueDoProduto(produto, loja.id);
@@ -397,6 +405,20 @@ export default function ProdutosPage() {
                 />
               </div>
             </div>
+
+            <label className="mb-1 block text-sm text-slate-500">Grupo fiscal</label>
+            <select
+              value={grupoFiscalId}
+              onChange={(e) => setGrupoFiscalId(e.target.value)}
+              className="mb-4 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            >
+              <option value="">Nenhum</option>
+              {gruposFiscais.map((grupo) => (
+                <option key={grupo.id} value={grupo.id}>
+                  {grupo.nome}
+                </option>
+              ))}
+            </select>
 
             {erro && (
               <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">

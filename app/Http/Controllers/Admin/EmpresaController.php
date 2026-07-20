@@ -66,6 +66,7 @@ class EmpresaController extends Controller
         $data = $request->validate([
             'nome' => ['required', 'string', 'max:255'],
             'ativo' => ['boolean'],
+            'regime_tributario' => ['required', 'in:simples_nacional,lucro_presumido,lucro_real'],
         ]);
         $data['ativo'] = $request->boolean('ativo');
 

@@ -111,6 +111,25 @@ class LinkProSyncService
         limit 500
         SQL;
 
+    // Venda cancelada no Link Pro DEPOIS de já ter sido sincronizada aqui
+    // (cursor de vendas é só id_negociacao > checkpoint, nunca revisita uma
+    // negociação já trazida) — sem isso, cancelamento feito lá nunca chega
+    // aqui, e a venda fica pra sempre como "concluída" no nosso relatório.
+    // Não usa cursor: reconsulta sempre a janela recente (negociação dos
+    // últimos 14 dias, cancelamento em loja normalmente acontece no mesmo
+    // dia ou poucos dias depois da venda) — mais simples e barato que
+    // manter mais um cursor, e idempotente (uuid5 determinístico decide se
+    // já foi cancelada aqui).
+    private const QUERY_CANCELAMENTOS = <<<'SQL'
+        select
+          n.id_negociacao as id,
+          nfe.motivo_cancelamento as motivo
+        from negociacao n
+        join caixa cx on cx.id_negociacao = n.id_negociacao
+        join nfe on nfe.id_caixa = cx.id_caixa and nfe.situacao = 'Cancelada'
+        where n.data >= now() - interval '14 days'
+        SQL;
+
     private const QUERY_ITENS = <<<'SQL'
         select
           iv.id_negociacao   as venda_id,
@@ -207,6 +226,7 @@ class LinkProSyncService
     {
         return $this->executar($conexao, 'incremental', function ($origem) use ($conexao) {
             $vendasSincronizadas = $this->sincronizarVendas($conexao, $origem);
+            $this->sincronizarCancelamentos($conexao, $origem);
             $estoqueAtualizado = $this->aplicarReconciliacaoEstoque($conexao, $origem);
             $this->sincronizarCatalogoLoja($conexao, $origem);
 
@@ -431,6 +451,60 @@ class LinkProSyncService
         $conexao->save();
 
         return $criadas;
+    }
+
+    /**
+     * Propaga cancelamento feito no Link Pro DEPOIS de a venda já ter sido
+     * sincronizada aqui (ver QUERY_CANCELAMENTOS) — mesma ação de
+     * VendaController::cancelar(): estorna item por item e marca status.
+     * Idempotente (uuid5 determinístico, pula quem já está cancelada aqui
+     * ou nunca foi sincronizada — ex.: venda de fora da janela de 14 dias).
+     */
+    private function sincronizarCancelamentos(SyncConexao $conexao, Connection $origem): int
+    {
+        $registros = $origem->select(self::QUERY_CANCELAMENTOS);
+        if (empty($registros)) {
+            return 0;
+        }
+
+        $cancelados = 0;
+
+        foreach ($registros as $registro) {
+            $uuid = Uuid::uuid5(self::NAMESPACE_LINKPRO, "{$conexao->id}:{$registro->id}")->toString();
+
+            $venda = Venda::where('uuid', $uuid)->where('status', '!=', 'cancelada')->first();
+            if (! $venda) {
+                continue;
+            }
+
+            $venda->loadMissing('itens.produto');
+
+            DB::transaction(function () use ($venda, $conexao, $registro) {
+                foreach ($venda->itens as $item) {
+                    if (! $item->produto->ehServico()) {
+                        $this->estoque->ajustarDelta(
+                            $item->produto,
+                            $conexao->loja_id,
+                            $item->quantidade,
+                            'cancelamento_venda',
+                            origemTipo: 'venda',
+                            origemId: $venda->id,
+                            observacao: 'Cancelada no Link Pro'.($registro->motivo ? ": {$registro->motivo}" : ''),
+                        );
+                    }
+                }
+
+                $venda->update(['status' => 'cancelada']);
+            });
+
+            $cancelados++;
+        }
+
+        if ($cancelados > 0) {
+            $this->avisos[] = "{$cancelados} venda(s) cancelada(s) no Link Pro refletida(s) aqui.";
+        }
+
+        return $cancelados;
     }
 
     /**

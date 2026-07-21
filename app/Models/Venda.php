@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToEmpresa;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['uuid', 'loja_id', 'sync_conexao_id', 'user_id', 'vendedor_externo_nome', 'cliente_id', 'subtotal', 'desconto', 'total', 'status', 'feita_offline'])]
 class Venda extends Model
 {
-    use HasFactory;
+    use BelongsToEmpresa, HasFactory;
 
     protected function casts(): array
     {
@@ -51,5 +53,21 @@ class Venda extends Model
     public function pagamentos(): HasMany
     {
         return $this->hasMany(VendaPagamento::class);
+    }
+
+    /**
+     * Uma venda pode ter mais de uma nota (carrinho misto produto+serviço
+     * vira NFC-e + NFS-e, ver VendaController::emitirNotaSeConfigurado) —
+     * hasOne pegaria uma qualquer das duas. Use notasFiscais() pra listar
+     * todas; isso aqui fica só pelo caso comum (só NFC-e).
+     */
+    public function notaFiscal(): HasOne
+    {
+        return $this->hasOne(NotaFiscal::class)->where('tipo', 'nfce');
+    }
+
+    public function notasFiscais(): HasMany
+    {
+        return $this->hasMany(NotaFiscal::class);
     }
 }

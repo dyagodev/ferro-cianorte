@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { apiFetch } from "@/lib/apiClient";
+import { apiFetch, ApiError } from "@/lib/apiClient";
 import { imprimir } from "@/lib/imprimir";
 import type { StatusAtualizacao } from "@/components/ElectronTitlebar";
 import type { FormaPagamento, Venda } from "@/lib/types";
@@ -196,6 +196,7 @@ export default function MenuModal({
         {aba === "vendas" && (
           <VendasLista
             lojaId={lojaId}
+            role={role}
             vendaSelecionada={vendaSelecionada}
             onSelecionar={setVendaSelecionada}
           />
@@ -532,10 +533,12 @@ type PaginaVendas = {
 
 function VendasLista({
   lojaId,
+  role,
   vendaSelecionada,
   onSelecionar,
 }: {
   lojaId: number | null;
+  role: "admin" | "vendedor";
   vendaSelecionada: Venda | null;
   onSelecionar: (venda: Venda | null) => void;
 }) {
@@ -555,7 +558,7 @@ function VendasLista({
   }, [lojaId, pagina, vendaSelecionada]);
 
   if (vendaSelecionada) {
-    return <VendaDetalhe venda={vendaSelecionada} />;
+    return <VendaDetalhe venda={vendaSelecionada} role={role} onAtualizar={onSelecionar} />;
   }
 
   if (erro) return <p className="text-red-600">Não foi possível carregar as vendas.</p>;
@@ -654,7 +657,7 @@ function vendaParaCupom(venda: Venda): VendaConcluida {
   return {
     id: venda.id,
     dataHora: venda.created_at,
-    lojaNome: venda.loja.nome,
+    lojaNome: venda.loja?.nome ?? "—",
     vendedorNome: venda.vendedor_externo_nome ?? venda.vendedor.name,
     clienteNome: venda.cliente?.nome ?? "não informado",
     itens: venda.itens.map((item) => ({
@@ -673,13 +676,83 @@ function vendaParaCupom(venda: Venda): VendaConcluida {
   };
 }
 
-function VendaDetalhe({ venda }: { venda: Venda }) {
+function VendaDetalhe({
+  venda,
+  role,
+  onAtualizar,
+}: {
+  venda: Venda;
+  role: "admin" | "vendedor";
+  onAtualizar: (venda: Venda) => void;
+}) {
   const cancelada = venda.status === "cancelada";
   const nomeVendedor = venda.vendedor_externo_nome ?? venda.vendedor.name;
+  const notas = venda.notas_fiscais ?? [];
+  const jaAutorizada = notas.some((n) => n.status === "authorized");
+  const [emitindo, setEmitindo] = useState(false);
+  const [erroEmissao, setErroEmissao] = useState<string | null>(null);
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
+  const [erroCancelamento, setErroCancelamento] = useState<string | null>(null);
+
+  async function cancelarNota(nota: NonNullable<Venda["notas_fiscais"]>[number]) {
+    const justificativa = window.prompt(
+      "Justificativa do cancelamento (mín. 15 caracteres, exigido pela SEFAZ):",
+    );
+    if (!justificativa) return;
+    if (justificativa.trim().length < 15) {
+      window.alert("A justificativa precisa ter pelo menos 15 caracteres.");
+      return;
+    }
+    if (!window.confirm("Confirma o cancelamento dessa NFC-e na SEFAZ? Essa ação não pode ser desfeita.")) {
+      return;
+    }
+    setCancelandoId(nota.id);
+    setErroCancelamento(null);
+    try {
+      const atualizada = await apiFetch<NonNullable<Venda["notas_fiscais"]>[number]>(
+        `notas-fiscais/${nota.id}/cancelar`,
+        { method: "POST", body: JSON.stringify({ justificativa: justificativa.trim() }) },
+      );
+      onAtualizar({
+        ...venda,
+        notas_fiscais: notas.map((n) => (n.id === atualizada.id ? atualizada : n)),
+      });
+    } catch (e) {
+      setErroCancelamento(e instanceof ApiError ? e.message : "Não foi possível cancelar a nota fiscal.");
+    } finally {
+      setCancelandoId(null);
+    }
+  }
+
+  async function emitirNota() {
+    setEmitindo(true);
+    setErroEmissao(null);
+    try {
+      const resposta = await apiFetch<{ notas_fiscais: NonNullable<Venda["notas_fiscais"]> }>(
+        `vendas/${venda.id}/emitir-nota`,
+        { method: "POST" },
+      );
+      onAtualizar({ ...venda, notas_fiscais: resposta.notas_fiscais });
+    } catch (e) {
+      setErroEmissao(e instanceof ApiError ? e.message : "Não foi possível emitir a nota fiscal.");
+    } finally {
+      setEmitindo(false);
+    }
+  }
 
   return (
     <div>
-      <div className="mb-4 flex justify-end print:hidden">
+      <div className="mb-4 flex justify-end gap-2 print:hidden">
+        {role === "admin" && !cancelada && !jaAutorizada && (
+          <button
+            onClick={emitirNota}
+            disabled={emitindo}
+            className="flex items-center gap-1.5 rounded border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+          >
+            <ReceiptText className="h-4 w-4" />
+            {emitindo ? "Emitindo..." : "Emitir nota fiscal"}
+          </button>
+        )}
         <button
           onClick={() => imprimir()}
           className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
@@ -688,6 +761,88 @@ function VendaDetalhe({ venda }: { venda: Venda }) {
           Imprimir
         </button>
       </div>
+
+      {role === "admin" && (notas.length > 0 || erroEmissao) && (
+        <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm print:hidden">
+          {notas.map((nota) => (
+            <div key={nota.id} className="flex items-center justify-between">
+              <span className="text-slate-600">{nota.tipo.toUpperCase()}</span>
+              <span className="flex items-center gap-2">
+                {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
+                  <a
+                    href={`/api/proxy/notas-fiscais/${nota.id}/danfe`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Baixar DANFE
+                  </a>
+                )}
+                {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
+                  <a
+                    href={`/api/proxy/notas-fiscais/${nota.id}/xml`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Baixar XML
+                  </a>
+                )}
+                {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
+                  <button
+                    onClick={() => cancelarNota(nota)}
+                    disabled={cancelandoId === nota.id}
+                    className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {cancelandoId === nota.id ? "Cancelando..." : "Cancelar"}
+                  </button>
+                )}
+                {nota.url_danfe && (
+                  <a
+                    href={nota.url_danfe}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Ver nota (SEFAZ)
+                  </a>
+                )}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    nota.status === "authorized"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : nota.status === "rejected"
+                        ? "bg-red-100 text-red-700"
+                        : nota.status === "canceled"
+                          ? "bg-slate-200 text-slate-600"
+                          : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {nota.status === "authorized"
+                    ? "Autorizada"
+                    : nota.status === "rejected"
+                      ? "Rejeitada"
+                      : nota.status === "canceled"
+                        ? "Cancelada"
+                        : nota.status}
+                </span>
+              </span>
+            </div>
+          ))}
+          {erroEmissao && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-red-600">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {erroEmissao}
+            </p>
+          )}
+          {erroCancelamento && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-red-600">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {erroCancelamento}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="mb-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
         <div>

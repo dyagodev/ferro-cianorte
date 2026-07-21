@@ -54,8 +54,20 @@ class ClienteController extends Controller
         return $request->validate([
             'nome' => ['required', 'string', 'max:255'],
             'cpf_cnpj' => ['nullable', 'string', 'max:18'],
+            'inscricao_estadual' => ['nullable', 'string', 'max:20'],
             'telefone' => ['nullable', 'string', 'max:20'],
             'endereco' => ['nullable', 'string', 'max:255'],
+            // Endereço estruturado — só é obrigatório na prática pra emitir
+            // NF-e (ver Cliente::possuiEnderecoCompletoParaNfe), aqui fica
+            // tudo opcional pra não travar o cadastro rápido do PDV.
+            'cep' => ['nullable', 'string', 'max:9'],
+            'logradouro' => ['nullable', 'string', 'max:255'],
+            'numero' => ['nullable', 'string', 'max:20'],
+            'complemento' => ['nullable', 'string', 'max:255'],
+            'bairro' => ['nullable', 'string', 'max:255'],
+            'cidade' => ['nullable', 'string', 'max:255'],
+            'uf' => ['nullable', 'string', 'size:2'],
+            'codigo_municipio' => ['nullable', 'string', 'max:7'],
         ]);
     }
 }

@@ -35,16 +35,19 @@ const ICONES_FORMA_PAGAMENTO: Record<FormaPagamento, LucideIcon> = {
 export default function PagamentoModal({
   total,
   clienteNome,
+  possuiSpedyConfigurado,
   onFechar,
   onConfirmar,
 }: {
   total: number;
   clienteNome: string;
+  possuiSpedyConfigurado: boolean;
   onFechar: () => void;
-  onConfirmar: (pagamentos: Pagamento[]) => Promise<void>;
+  onConfirmar: (pagamentos: Pagamento[], emitirNotaFiscal: boolean) => Promise<void>;
 }) {
   const [forma, setForma] = useState<FormaPagamento>("dinheiro");
   const [valorPago, setValorPago] = useState(total.toFixed(2));
+  const [emitirNotaFiscal, setEmitirNotaFiscal] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -58,7 +61,7 @@ export default function PagamentoModal({
     setErro(null);
 
     try {
-      await onConfirmar([{ forma_pagamento: forma, valor: Number(valorPago) || total }]);
+      await onConfirmar([{ forma_pagamento: forma, valor: Number(valorPago) || total }], emitirNotaFiscal);
     } catch {
       setErro("Não foi possível concluir a venda. Tente novamente.");
       setEnviando(false);
@@ -140,6 +143,36 @@ export default function PagamentoModal({
           <CircleDollarSign className="h-5 w-5" />
           F6 - Troco: {forma === "dinheiro" ? `R$ ${troco.toFixed(2)}` : "—"}
         </p>
+
+        {possuiSpedyConfigurado && (
+          <div className="mb-4">
+            <label className="mb-1 block text-sm text-slate-500">Emitir nota fiscal (NFC-e)?</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setEmitirNotaFiscal(true)}
+                className={`rounded border px-3 py-2 text-sm ${
+                  emitirNotaFiscal
+                    ? "border-blue-500 bg-blue-600 text-white"
+                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                Sim
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmitirNotaFiscal(false)}
+                className={`rounded border px-3 py-2 text-sm ${
+                  !emitirNotaFiscal
+                    ? "border-blue-500 bg-blue-600 text-white"
+                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                Não
+              </button>
+            </div>
+          </div>
+        )}
 
         {erro && (
           <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">

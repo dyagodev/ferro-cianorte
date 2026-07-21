@@ -10,9 +10,14 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  // FormData (upload de arquivo) precisa que o navegador defina o
+  // Content-Type sozinho (multipart/form-data com o boundary embutido) —
+  // se a gente forçar "application/json" aqui, o multipart quebra.
+  const isFormData = options.body instanceof FormData;
+
   const response = await fetch(`/api/proxy/${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: isFormData ? options.headers : { "Content-Type": "application/json", ...options.headers },
   });
 
   const contentType = response.headers.get("content-type") ?? "";

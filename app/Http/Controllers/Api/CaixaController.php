@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MovimentacaoCaixa;
 use App\Models\VendaPagamento;
+use App\Support\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 class CaixaController extends Controller
 {
@@ -20,7 +22,7 @@ class CaixaController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', 'exists:lojas,id'],
+            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', Rule::exists('lojas', 'id')->where('empresa_id', TenantContext::id())],
         ]);
 
         $lojaId = $user->isAdmin() ? $data['loja_id'] : $user->loja_id;
@@ -53,7 +55,7 @@ class CaixaController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', 'exists:lojas,id'],
+            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', Rule::exists('lojas', 'id')->where('empresa_id', TenantContext::id())],
             'valor' => ['required', 'numeric', 'min:0'],
         ]);
 
@@ -96,7 +98,7 @@ class CaixaController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', 'exists:lojas,id'],
+            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', Rule::exists('lojas', 'id')->where('empresa_id', TenantContext::id())],
             'valor' => ['required', 'numeric', 'min:0.01'],
             'observacao' => ['nullable', 'string', 'max:255'],
         ]);
@@ -123,7 +125,7 @@ class CaixaController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', 'exists:lojas,id'],
+            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', Rule::exists('lojas', 'id')->where('empresa_id', TenantContext::id())],
         ]);
 
         $lojaId = $user->isAdmin() ? $data['loja_id'] : $user->loja_id;
@@ -180,7 +182,7 @@ class CaixaController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', 'exists:lojas,id'],
+            'loja_id' => [$user->isAdmin() ? 'required' : 'nullable', Rule::exists('lojas', 'id')->where('empresa_id', TenantContext::id())],
             'valor_conferido' => ['required', 'numeric', 'min:0'],
             'observacao' => ['nullable', 'string', 'max:255'],
         ]);

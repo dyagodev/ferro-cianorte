@@ -38,10 +38,12 @@ export default function PdvScreen({
   role,
   nomeUsuario,
   lojaIdSessao,
+  possuiSpedyConfigurado,
 }: {
   role: "admin" | "vendedor";
   nomeUsuario: string;
   lojaIdSessao: number | null;
+  possuiSpedyConfigurado: boolean;
 }) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
@@ -214,7 +216,10 @@ export default function PdvScreen({
     router.refresh();
   }
 
-  async function confirmarVenda(pagamentos: { forma_pagamento: string; valor: number }[]) {
+  async function confirmarVenda(
+    pagamentos: { forma_pagamento: string; valor: number }[],
+    emitirNotaFiscal: boolean,
+  ) {
     const venda = await apiFetch<{ id: number; created_at: string }>("vendas", {
       method: "POST",
       body: JSON.stringify({
@@ -227,6 +232,7 @@ export default function PdvScreen({
           preco_unitario: item.precoVendido,
         })),
         pagamentos,
+        emitir_nota_fiscal: emitirNotaFiscal,
       }),
     });
 
@@ -560,6 +566,7 @@ export default function PdvScreen({
         <PagamentoModal
           total={total}
           clienteNome={cliente?.nome ?? "não informado"}
+          possuiSpedyConfigurado={possuiSpedyConfigurado}
           onFechar={() => setModalPagamentoAberto(false)}
           onConfirmar={confirmarVenda}
         />

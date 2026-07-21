@@ -70,6 +70,11 @@ class GrupoFiscalController extends Controller
             'aliquota_pis' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'cst_cofins' => ['nullable', 'string', 'max:2'],
             'aliquota_cofins' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // IBS/CBS (Reforma Tributária, NT 2025.002) — só usado em Regime
+            // Normal (CRT=3), ver NfceService::montarIbsCbs(). Default '000'
+            // + '000001' = tributação integral, o caso mais comum.
+            'cst_ibscbs' => ['nullable', 'string', 'max:3'],
+            'cclasstrib_ibscbs' => ['nullable', 'string', 'max:6'],
         ]);
     }
 }

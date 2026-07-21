@@ -30,6 +30,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
     // super_admin é da DM Tecnologia, não de uma empresa cliente — só ele
     // cadastra empresa nova (ver EmpresaController).
     Route::middleware(['auth', 'role:super_admin'])->group(function () {
+        // Precisa vir antes do resource, senão "consulta-cnpj" seria
+        // interpretado como o {empresa} do resource (GET empresas/{empresa}).
+        Route::get('/empresas/consulta-cnpj/{cnpj}', [EmpresaController::class, 'consultarCnpj'])->name('empresas.consulta-cnpj');
+        Route::post('/empresas/{empresa}/spedy-certificado', [EmpresaController::class, 'enviarCertificado'])->name('empresas.spedy-certificado');
+        Route::post('/empresas/{empresa}/certificado-fiscal', [EmpresaController::class, 'enviarCertificadoFiscal'])->name('empresas.certificado-fiscal');
         Route::resource('empresas', EmpresaController::class)->except(['show']);
     });
 });

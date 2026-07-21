@@ -1,29 +1,33 @@
 "use client";
 
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
   BarChart3,
   CreditCard,
+  History,
   Printer,
   ReceiptText,
+  Send,
   TrendingUp,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/apiClient";
-import type { FormaPagamento, Loja } from "@/lib/types";
+import { apiFetch, ApiError } from "@/lib/apiClient";
+import type { FormaPagamento, Loja, MovimentacaoEstoque, NotaFiscal } from "@/lib/types";
 
-type Aba = "vendas" | "fechamento" | "produtos" | "estoque";
+type Aba = "vendas" | "fechamento" | "produtos" | "estoque" | "historico_estoque";
 
 const ABAS: { valor: Aba; rotulo: string; icone: LucideIcon }[] = [
   { valor: "vendas", rotulo: "Vendas por período", icone: ReceiptText },
   { valor: "fechamento", rotulo: "Fechamento de caixa", icone: CreditCard },
   { valor: "produtos", rotulo: "Produtos mais vendidos", icone: TrendingUp },
   { valor: "estoque", rotulo: "Estoque baixo", icone: AlertTriangle },
+  { valor: "historico_estoque", rotulo: "Histórico de estoque", icone: History },
 ];
 
 function hoje() {
@@ -138,6 +142,7 @@ export default function RelatoriosPage() {
         {aba === "fechamento" && <RelatorioFechamento query={filtros.toString()} />}
         {aba === "produtos" && <RelatorioProdutos query={filtros.toString()} />}
         {aba === "estoque" && <RelatorioEstoqueBaixo lojaId={lojaId} />}
+        {aba === "historico_estoque" && <RelatorioHistoricoEstoque query={filtros.toString()} />}
       </div>
     </div>
   );
@@ -169,7 +174,24 @@ type VendaResumo = {
   cliente: { nome: string } | null;
   itens: VendaItemResumo[];
   pagamentos: { forma_pagamento: string; valor: string }[];
+  notas_fiscais?: NotaFiscal[];
 };
+
+const ROTULO_TIPO_NOTA: Record<string, string> = { nfce: "NFC-e", nfe: "NF-e", nfse: "NFS-e" };
+
+function corStatusNota(status: string): string {
+  if (status === "authorized") return "bg-emerald-100 text-emerald-700";
+  if (status === "rejected") return "bg-red-100 text-red-700";
+  if (status === "canceled") return "bg-slate-200 text-slate-600";
+  return "bg-amber-100 text-amber-700";
+}
+
+function rotuloStatusNota(status: string): string {
+  if (status === "authorized") return "Autorizada";
+  if (status === "rejected") return "Rejeitada";
+  if (status === "canceled") return "Cancelada";
+  return status;
+}
 
 function nomeVendedor(venda: VendaResumo): string {
   return venda.vendedor_externo_nome ?? venda.vendedor.name;
@@ -269,7 +291,7 @@ function RelatorioVendas({ query }: { query: string }) {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2">{venda.loja.nome}</td>
+                  <td className="px-3 py-2">{venda.loja?.nome ?? "—"}</td>
                   <td className="px-3 py-2">{nomeVendedor(venda)}</td>
                   <td className="px-3 py-2">{venda.cliente?.nome ?? "—"}</td>
                   <td className="px-3 py-2">
@@ -328,13 +350,86 @@ function RelatorioVendas({ query }: { query: string }) {
         </table>
       </div>
 
-      {vendaDetalhe && <VendaDetalheModal venda={vendaDetalhe} onFechar={() => setVendaDetalhe(null)} />}
+      {vendaDetalhe && (
+        <VendaDetalheModal
+          venda={vendaDetalhe}
+          onFechar={() => setVendaDetalhe(null)}
+          aposEmitir={carregar}
+        />
+      )}
     </div>
   );
 }
 
-function VendaDetalheModal({ venda, onFechar }: { venda: VendaResumo; onFechar: () => void }) {
+function VendaDetalheModal({
+  venda,
+  onFechar,
+  aposEmitir,
+}: {
+  venda: VendaResumo;
+  onFechar: () => void;
+  aposEmitir: () => void;
+}) {
   const cancelada = venda.status === "cancelada";
+  const [notas, setNotas] = useState<NotaFiscal[]>(venda.notas_fiscais ?? []);
+  const [emitindo, setEmitindo] = useState(false);
+  const [erroEmissao, setErroEmissao] = useState<string | null>(null);
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
+  const [erroCancelamento, setErroCancelamento] = useState<string | null>(null);
+
+  const jaAutorizada = notas.some((n) => n.status === "authorized");
+
+  async function cancelarNota(nota: NotaFiscal) {
+    const justificativa = window.prompt(
+      "Justificativa do cancelamento (mín. 15 caracteres, exigido pela SEFAZ):",
+    );
+    if (!justificativa) return;
+    if (justificativa.trim().length < 15) {
+      window.alert("A justificativa precisa ter pelo menos 15 caracteres.");
+      return;
+    }
+    if (!window.confirm("Confirma o cancelamento dessa NFC-e na SEFAZ? Essa ação não pode ser desfeita.")) {
+      return;
+    }
+    setCancelandoId(nota.id);
+    setErroCancelamento(null);
+    try {
+      const atualizada = await apiFetch<NotaFiscal>(`notas-fiscais/${nota.id}/cancelar`, {
+        method: "POST",
+        body: JSON.stringify({ justificativa: justificativa.trim() }),
+      });
+      setNotas((atual) => atual.map((n) => (n.id === atualizada.id ? atualizada : n)));
+      aposEmitir();
+    } catch (e) {
+      const mensagem =
+        e instanceof ApiError ? (e.body as { message?: string }).message : undefined;
+      setErroCancelamento(mensagem ?? "Não foi possível cancelar a nota fiscal.");
+    } finally {
+      setCancelandoId(null);
+    }
+  }
+
+  async function emitirNota() {
+    setEmitindo(true);
+    setErroEmissao(null);
+    try {
+      const resposta = await apiFetch<{ notas_fiscais: NotaFiscal[] }>(`vendas/${venda.id}/emitir-nota`, {
+        method: "POST",
+      });
+      setNotas(resposta.notas_fiscais);
+      aposEmitir();
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const corpo = e.body as { message?: string; notas_fiscais?: NotaFiscal[] };
+        setErroEmissao(corpo.message ?? "Não foi possível emitir a nota fiscal.");
+        if (corpo.notas_fiscais) setNotas(corpo.notas_fiscais);
+      } else {
+        setErroEmissao("Não foi possível emitir a nota fiscal.");
+      }
+    } finally {
+      setEmitindo(false);
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -370,7 +465,7 @@ function VendaDetalheModal({ venda, onFechar }: { venda: VendaResumo; onFechar: 
           </div>
           <div>
             <span className="block text-xs text-slate-400">Loja</span>
-            {venda.loja.nome}
+            {venda.loja?.nome ?? "—"}
           </div>
           <div>
             <span className="block text-xs text-slate-400">Vendedor</span>
@@ -380,6 +475,91 @@ function VendaDetalheModal({ venda, onFechar }: { venda: VendaResumo; onFechar: 
             <span className="block text-xs text-slate-400">Cliente</span>
             {venda.cliente?.nome ?? "não informado"}
           </div>
+        </div>
+
+        <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3 print:hidden">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-600">Nota fiscal</p>
+            {!cancelada && !jaAutorizada && (
+              <button
+                onClick={emitirNota}
+                disabled={emitindo}
+                className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {emitindo ? "Emitindo..." : "Emitir nota fiscal"}
+              </button>
+            )}
+          </div>
+
+          {notas.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhuma nota emitida ainda.</p>
+          ) : (
+            <ul className="space-y-1">
+              {notas.map((nota) => (
+                <li key={nota.id} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">{ROTULO_TIPO_NOTA[nota.tipo] ?? nota.tipo}</span>
+                  <span className="flex items-center gap-2">
+                    {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
+                      <a
+                        href={`/api/proxy/notas-fiscais/${nota.id}/danfe`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Baixar DANFE
+                      </a>
+                    )}
+                    {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
+                      <a
+                        href={`/api/proxy/notas-fiscais/${nota.id}/xml`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Baixar XML
+                      </a>
+                    )}
+                    {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
+                      <button
+                        onClick={() => cancelarNota(nota)}
+                        disabled={cancelandoId === nota.id}
+                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        {cancelandoId === nota.id ? "Cancelando..." : "Cancelar"}
+                      </button>
+                    )}
+                    {nota.url_danfe && (
+                      <a
+                        href={nota.url_danfe}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Ver nota (SEFAZ)
+                      </a>
+                    )}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${corStatusNota(nota.status)}`}>
+                      {rotuloStatusNota(nota.status)}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {erroEmissao && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {erroEmissao}
+            </p>
+          )}
+          {erroCancelamento && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {erroCancelamento}
+            </p>
+          )}
         </div>
 
         <p className="mb-2 text-sm font-medium text-slate-600">Itens</p>
@@ -689,6 +869,173 @@ function RelatorioEstoqueBaixo({ lojaId }: { lojaId: string }) {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const ROTULO_TIPO_MOVIMENTACAO_ESTOQUE: Record<string, string> = {
+  venda: "Venda",
+  cancelamento_venda: "Cancelamento de venda",
+  transferencia_saida: "Transferência (saída)",
+  transferencia_entrada: "Transferência (entrada)",
+  transferencia_estorno: "Transferência (estorno)",
+  sincronizacao_linkpro: "Sincronização Link Pro",
+  reconciliacao_linkpro: "Reconciliação Link Pro",
+  ajuste_manual: "Ajuste manual",
+};
+
+function corTipoMovimentacaoEstoque(tipo: string): string {
+  if (tipo === "venda" || tipo === "transferencia_saida") return "bg-red-100 text-red-700";
+  if (tipo === "cancelamento_venda" || tipo === "transferencia_entrada" || tipo === "transferencia_estorno") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (tipo === "ajuste_manual") return "bg-amber-100 text-amber-700";
+  return "bg-slate-100 text-slate-600";
+}
+
+type PaginaMovimentacoes = {
+  data: MovimentacaoEstoque[];
+  current_page: number;
+  last_page: number;
+};
+
+function RelatorioHistoricoEstoque({ query }: { query: string }) {
+  const [dados, setDados] = useState<PaginaMovimentacoes | null>(null);
+  const [pagina, setPagina] = useState(1);
+  const [tipo, setTipo] = useState("");
+  const [buscaProduto, setBuscaProduto] = useState("");
+
+  useEffect(() => {
+    setPagina(1);
+  }, [query, tipo]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(query);
+    params.set("page", String(pagina));
+    if (tipo) params.set("tipo", tipo);
+    apiFetch<PaginaMovimentacoes>(`relatorios/estoque-historico?${params.toString()}`).then(setDados);
+  }, [query, tipo, pagina]);
+
+  const linhas = (dados?.data ?? []).filter((mov) =>
+    buscaProduto.trim() === ""
+      ? true
+      : mov.produto?.descricao.toLowerCase().includes(buscaProduto.trim().toLowerCase()) ||
+        mov.produto?.codigo_interno?.toLowerCase().includes(buscaProduto.trim().toLowerCase()),
+  );
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap gap-3 print:hidden">
+        <div>
+          <label className="mb-1 block text-xs text-slate-500">Tipo de movimento</label>
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+            className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm"
+          >
+            <option value="">Todos</option>
+            {Object.entries(ROTULO_TIPO_MOVIMENTACAO_ESTOQUE).map(([valor, rotulo]) => (
+              <option key={valor} value={valor}>
+                {rotulo}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-500">Filtrar produto (nessa página)</label>
+          <input
+            value={buscaProduto}
+            onChange={(e) => setBuscaProduto(e.target.value)}
+            placeholder="Descrição ou código..."
+            className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-auto rounded border border-slate-200">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-slate-500">
+            <tr className="divide-x divide-slate-200">
+              <th className="px-3 py-2">Data</th>
+              <th className="px-3 py-2">Produto</th>
+              <th className="px-3 py-2">Loja</th>
+              <th className="px-3 py-2">Tipo</th>
+              <th className="px-3 py-2">Antes</th>
+              <th className="px-3 py-2">Depois</th>
+              <th className="px-3 py-2">Variação</th>
+              <th className="px-3 py-2">Quem</th>
+              <th className="px-3 py-2">Observação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!dados && (
+              <tr>
+                <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
+                  Carregando...
+                </td>
+              </tr>
+            )}
+            {dados && linhas.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
+                  Nenhuma movimentação encontrada.
+                </td>
+              </tr>
+            )}
+            {linhas.map((mov) => (
+              <tr key={mov.id} className="divide-x divide-slate-200 border-t border-slate-200">
+                <td className="px-3 py-2 whitespace-nowrap">{new Date(mov.created_at).toLocaleString("pt-BR")}</td>
+                <td className="px-3 py-2">
+                  {mov.produto?.descricao ?? `#${mov.produto_id}`}
+                  {mov.produto?.codigo_interno && (
+                    <span className="ml-1 text-xs text-slate-400">({mov.produto.codigo_interno})</span>
+                  )}
+                </td>
+                <td className="px-3 py-2">{mov.loja?.nome ?? "—"}</td>
+                <td className="px-3 py-2">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${corTipoMovimentacaoEstoque(mov.tipo)}`}>
+                    {ROTULO_TIPO_MOVIMENTACAO_ESTOQUE[mov.tipo] ?? mov.tipo}
+                  </span>
+                </td>
+                <td className="px-3 py-2">{Number(mov.quantidade_antes).toFixed(3)}</td>
+                <td className="px-3 py-2">{Number(mov.quantidade_depois).toFixed(3)}</td>
+                <td className={`px-3 py-2 font-medium ${mov.delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {mov.delta >= 0 ? "+" : ""}
+                  {mov.delta.toFixed(3)}
+                </td>
+                <td className="px-3 py-2">{mov.usuario?.name ?? "Sistema"}</td>
+                <td className="px-3 py-2 max-w-xs truncate text-slate-500" title={mov.observacao ?? undefined}>
+                  {mov.observacao ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {dados && dados.last_page > 1 && (
+        <div className="mt-3 flex items-center justify-between text-sm text-slate-600 print:hidden">
+          <span>
+            Página {dados.current_page} de {dados.last_page}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              disabled={dados.current_page <= 1}
+              className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100 disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setPagina((p) => p + 1)}
+              disabled={dados.current_page >= dados.last_page}
+              className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100 disabled:opacity-40"
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

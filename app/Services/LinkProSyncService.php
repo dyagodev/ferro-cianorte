@@ -18,10 +18,15 @@ use Throwable;
 /**
  * Porta pra dentro do Laravel a lógica que antes rodava no sync-agent
  * (Node.js, instalado na máquina de cada loja): lê vendas/itens/pagamentos e
- * ajustes de estoque direto do Postgres do Link Pro de cada loja (uma
+ * movimentações de estoque direto do Postgres do Link Pro de cada loja (uma
  * SyncConexao = um Postgres remoto) e grava aqui pelas mesmas regras que
  * VendaController::sync usava quando o agente empurrava via HTTP — agora é
  * tudo em processo, sem chamada de API.
+ *
+ * Estoque é 100% guiado por movimentação (log_produto_qtd_estoque, ver
+ * QUERY_ESTOQUE) — nunca lemos "quantidade atual" do Link Pro no ciclo
+ * normal. A única exceção é reconciliarEstoqueCompleto(), acionada só pelo
+ * botão de forçar sincronização (rede de segurança, não roda sozinha).
  *
  * As queries abaixo são as confirmadas contra o schema real do Link Pro
  * (InkDB) em sync-agent/queries/*.sql — ver aquele README pra contexto de
@@ -126,15 +131,17 @@ class LinkProSyncService
         where c.id_negociacao = any(?::bigint[])
         SQL;
 
-    // id_ajuste_estoque_motivo só vem preenchido quando a mudança foi um
-    // ajuste manual (contagem, balança, entrada de mercadoria) — nulo quando
-    // é decorrente de venda. Filtramos pra só trazer ajuste manual de
-    // propósito: venda do Link Pro já é decrementada por sincronizarVendas(),
-    // contar ela de novo aqui decrementaria a mesma venda duas vezes.
-    // qtd_estoque_antigo permite aplicar como DELTA (não valor absoluto) —
-    // overwrite absoluto apagaria venda feita direto no nosso próprio caixa
-    // entre uma sincronização e outra, já que o Link Pro nunca fica sabendo
-    // dessa venda.
+    // log_produto_qtd_estoque tem UM registro pra toda mudança de estoque —
+    // venda, entrada de mercadoria, ajuste manual, contagem, balança, tanto
+    // faz o motivo. Por isso essa query NÃO filtra por
+    // id_ajuste_estoque_motivo (chegou a filtrar só ajuste manual numa
+    // versão antiga, mas isso perdia entrada de mercadoria lançada por um
+    // caminho que não preenche esse campo) — trazemos toda movimentação, e
+    // quem decide o que fazer com ela é sincronizarEstoque(): aplica como
+    // DELTA (qtd_estoque_novo - qtd_estoque_antigo), nunca como valor
+    // absoluto. Isso também é o motivo de registrarVenda() não decrementar
+    // estoque na hora pra venda vinda do Link Pro: o próprio log dela chega
+    // aqui e já cobre o decremento, decrementar nos dois lugares duplicaria.
     private const QUERY_ESTOQUE = <<<'SQL'
         select
           l.id_log_produto_qtd_estoque as id,
@@ -151,7 +158,6 @@ class LinkProSyncService
         join produto p on p.id_produto = l.id_produto
         left join prod_unidade u on u.id_prod_unidade = p.id_prod_unidade
         where (l.data_hora, l.id_log_produto_qtd_estoque) > (?::timestamp, ?::bigint)
-          and l.id_ajuste_estoque_motivo is not null
         order by l.data_hora asc, l.id_log_produto_qtd_estoque asc
         limit 500
         SQL;
@@ -213,6 +219,10 @@ class LinkProSyncService
     /** @var string[] */
     private array $avisos = [];
 
+    public function __construct(private EstoqueService $estoque)
+    {
+    }
+
     public function sincronizar(SyncConexao $conexao): SyncExecucao
     {
         return $this->executar($conexao, 'incremental', function ($origem) use ($conexao) {
@@ -268,9 +278,13 @@ class LinkProSyncService
                 $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$produtoId] ?? 0);
                 $quantidadeCorrigida = (float) $registro->quantidade - $vendidoNativamente;
 
-                \App\Models\ProdutoEstoque::updateOrCreate(
-                    ['produto_id' => $produtoId, 'loja_id' => $conexao->loja_id],
-                    ['quantidade' => $quantidadeCorrigida],
+                $this->estoque->definirAbsoluto(
+                    Produto::find($produtoId),
+                    $conexao->loja_id,
+                    $quantidadeCorrigida,
+                    'reconciliacao_linkpro',
+                    origemTipo: 'sync_conexao',
+                    origemId: $conexao->id,
                 );
 
                 $atualizados++;
@@ -293,7 +307,15 @@ class LinkProSyncService
                 $quantidadeCorrigida = 0 - $vendidoNativamente;
 
                 if ((float) $estoqueFaltante->quantidade !== $quantidadeCorrigida) {
-                    $estoqueFaltante->update(['quantidade' => $quantidadeCorrigida]);
+                    $this->estoque->definirAbsoluto(
+                        $estoqueFaltante->produto,
+                        $conexao->loja_id,
+                        $quantidadeCorrigida,
+                        'reconciliacao_linkpro',
+                        origemTipo: 'sync_conexao',
+                        origemId: $conexao->id,
+                        observacao: 'Produto não encontrado mais na origem (Link Pro) — zerado.',
+                    );
                     $zerados++;
                 }
             }
@@ -395,8 +417,10 @@ class LinkProSyncService
     /**
      * Busca vendas novas (id > checkpoint, data >= sync_desde) e replica
      * cada uma seguindo a mesma regra de VendaController::registrarVenda —
-     * idempotente por uuid, decrementa estoque da loja, preserva a data
-     * real da venda.
+     * idempotente por uuid, preserva a data real da venda. Não decrementa
+     * estoque aqui (ver registrarVenda/sincronizarEstoque): quem faz isso é
+     * a sincronização de movimentação, lendo o próprio log dessa venda no
+     * Link Pro.
      */
     private function sincronizarVendas(SyncConexao $conexao, Connection $origem): int
     {
@@ -603,6 +627,12 @@ class LinkProSyncService
 
             $produtos = Produto::whereIn('id', array_column($itens, 'produto_id'))->get()->keyBy('id');
 
+            // NÃO decrementa estoque aqui: a venda que acabou de acontecer
+            // no Link Pro já gerou o próprio registro dela em
+            // log_produto_qtd_estoque (ver QUERY_ESTOQUE) — quem aplica o
+            // impacto no estoque é sincronizarEstoque(), lendo esse
+            // movimento como qualquer outro (entrada, ajuste, venda, tanto
+            // faz). Decrementar os dois lugares duplicaria a baixa.
             foreach ($itens as $item) {
                 $venda->itens()->create([
                     'produto_id' => $item['produto_id'],
@@ -611,8 +641,6 @@ class LinkProSyncService
                     'preco_unitario' => $item['preco_unitario'],
                     'total' => $item['quantidade'] * $item['preco_unitario'],
                 ]);
-
-                $this->decrementarEstoque($item['produto_id'], $lojaId, $item['quantidade']);
             }
 
             foreach ($pagamentos as $pagamento) {
@@ -621,35 +649,15 @@ class LinkProSyncService
         });
     }
 
-    private function decrementarEstoque(int $produtoId, int $lojaId, float $quantidade): void
-    {
-        $estoque = \App\Models\ProdutoEstoque::where('produto_id', $produtoId)
-            ->where('loja_id', $lojaId)
-            ->lockForUpdate()
-            ->first();
-
-        if (! $estoque) {
-            $estoque = \App\Models\ProdutoEstoque::create([
-                'produto_id' => $produtoId,
-                'loja_id' => $lojaId,
-                'quantidade' => 0,
-            ]);
-        }
-
-        // Estoque pode ficar negativo de propósito (o caixa não deve travar
-        // por divergência) — quantidade fracionária de propósito (produto
-        // vendido por peso/metro).
-        $estoque->decrement('quantidade', $quantidade);
-    }
-
     /**
-     * Ajustes de estoque feitos SEM venda no Link Pro (contagem manual,
-     * balança, entrada de mercadoria — QUERY_ESTOQUE já filtra só esses,
-     * exclui o que é decorrente de venda). Aplica como DELTA
-     * (qtd_estoque_novo - qtd_estoque_antigo), não como valor absoluto —
-     * overwrite apagaria uma venda feita direto no nosso próprio caixa que
-     * aconteceu entre uma sincronização e outra, já que o Link Pro nunca
-     * fica sabendo dela.
+     * TODA movimentação de estoque do Link Pro dessa loja (venda, entrada
+     * de mercadoria, ajuste manual, contagem, balança — ver QUERY_ESTOQUE),
+     * aplicada como DELTA (qtd_estoque_novo - qtd_estoque_antigo), nunca
+     * como valor absoluto — overwrite apagaria uma venda feita direto no
+     * nosso próprio caixa que aconteceu entre uma sincronização e outra, já
+     * que o Link Pro nunca fica sabendo dela. É essa função, e não mais
+     * registrarVenda(), que decrementa estoque de venda vinda do Link Pro
+     * (ver comentário lá).
      */
     private function sincronizarEstoque(SyncConexao $conexao, Connection $origem): int
     {
@@ -676,11 +684,14 @@ class LinkProSyncService
                 continue;
             }
 
-            $estoque = \App\Models\ProdutoEstoque::firstOrCreate(
-                ['produto_id' => $produtoId, 'loja_id' => $conexao->loja_id],
-                ['quantidade' => 0],
+            $this->estoque->ajustarDelta(
+                Produto::find($produtoId),
+                $conexao->loja_id,
+                $delta,
+                'sincronizacao_linkpro',
+                origemTipo: 'sync_conexao',
+                origemId: $conexao->id,
             );
-            $estoque->increment('quantidade', $delta);
 
             $atualizados++;
         }

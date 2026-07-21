@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'aliquota_pis',
     'cst_cofins',
     'aliquota_cofins',
+    'cst_ibscbs',
+    'cclasstrib_ibscbs',
 ])]
 class GrupoFiscal extends Model
 {

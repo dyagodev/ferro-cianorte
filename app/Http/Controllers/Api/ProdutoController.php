@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Produto;
 use App\Models\ProdutoEstoque;
+use App\Services\EstoqueService;
+use App\Support\Texto;
 use Illuminate\Http\Request;
 
 class ProdutoController extends Controller
@@ -20,14 +22,17 @@ class ProdutoController extends Controller
 
         if ($busca = $request->string('q')->toString()) {
             // Código interno é o que o leitor de código de barras lê — bate
-            // exato. Não filtra mais por quantidade em estoque: esse dado
-            // vem sujo/desatualizado do Link Pro (muito produto com estoque
-            // zerado ou negativo mesmo sendo vendível de verdade), e
-            // escondia venda legítima — quem controla o que aparece agora é
-            // só o desligamento por loja logo abaixo.
-            $query->where(function ($q) use ($busca) {
+            // exato. Descrição busca pela coluna normalizada (sem acento,
+            // minúscula — ver Produto::booted) senão "agua" não acha "Água
+            // Mineral". Não filtra mais por quantidade em estoque: esse
+            // dado vem sujo/desatualizado do Link Pro (muito produto com
+            // estoque zerado ou negativo mesmo sendo vendível de verdade),
+            // e escondia venda legítima — quem controla o que aparece
+            // agora é só o desligamento por loja logo abaixo.
+            $termoNormalizado = Texto::normalizar($busca);
+            $query->where(function ($q) use ($busca, $termoNormalizado) {
                 $q->where('codigo_interno', $busca)
-                    ->orWhere('descricao', 'like', "%{$busca}%");
+                    ->orWhere('descricao_normalizada', 'like', "%{$termoNormalizado}%");
             });
         }
 
@@ -98,16 +103,38 @@ class ProdutoController extends Controller
     /**
      * Ajusta (define) a quantidade em estoque de um produto numa loja.
      */
-    public function definirEstoque(Request $request, Produto $produto)
+    public function definirEstoque(Request $request, Produto $produto, EstoqueService $estoqueService)
     {
         $data = $request->validate([
             'loja_id' => ['required', 'exists:lojas,id'],
             'quantidade' => ['required', 'numeric'],
         ]);
 
+        return $estoqueService->definirAbsoluto(
+            $produto,
+            $data['loja_id'],
+            (float) $data['quantidade'],
+            'ajuste_manual',
+            usuario: $request->user(),
+        );
+    }
+
+    /**
+     * Liga/desliga um produto numa loja específica (sem mexer no produto
+     * geral nem nas outras lojas) — o campo que já existia vindo do sync do
+     * Link Pro, agora editável manualmente também. Produto desligado numa
+     * loja não aparece na busca do PDV dessa loja (ver index() acima).
+     */
+    public function alternarAtivoNaLoja(Request $request, Produto $produto)
+    {
+        $data = $request->validate([
+            'loja_id' => ['required', 'exists:lojas,id'],
+            'ativo' => ['required', 'boolean'],
+        ]);
+
         $estoque = ProdutoEstoque::updateOrCreate(
             ['produto_id' => $produto->id, 'loja_id' => $data['loja_id']],
-            ['quantidade' => $data['quantidade']],
+            ['ativo' => $data['ativo']],
         );
 
         return $estoque;
@@ -121,6 +148,9 @@ class ProdutoController extends Controller
             'descricao' => ['required', 'string', 'max:255'],
             'unidade' => ['nullable', 'string', 'max:10'],
             'tipo' => ['nullable', 'string', 'max:50'],
+            'natureza' => ['nullable', 'in:produto,servico'],
+            'codigo_servico_municipal' => ['nullable', 'string', 'max:255'],
+            'aliquota_iss' => ['nullable', 'numeric', 'min:0'],
             'grupo' => ['nullable', 'string', 'max:255'],
             'subgrupo' => ['nullable', 'string', 'max:255'],
             'marca' => ['nullable', 'string', 'max:255'],

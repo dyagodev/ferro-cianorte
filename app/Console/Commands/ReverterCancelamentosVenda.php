@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\ProdutoEstoque;
 use App\Models\Venda;
+use App\Services\EstoqueService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
 #[Description('Reverte vendas canceladas numa data específica, devolvendo o status e desfazendo o estorno de estoque')]
 class ReverterCancelamentosVenda extends Command
 {
-    public function handle(): int
+    public function handle(EstoqueService $estoque): int
     {
         try {
             $dia = Carbon::createFromFormat('Y-m-d', $this->argument('data'), 'America/Sao_Paulo');
@@ -35,7 +35,7 @@ class ReverterCancelamentosVenda extends Command
             return self::FAILURE;
         }
 
-        $vendas = Venda::with('itens')
+        $vendas = Venda::with('itens.produto')
             ->where('status', 'cancelada')
             ->whereBetween('updated_at', [$dia->copy()->startOfDay(), $dia->copy()->endOfDay()])
             ->get();
@@ -60,11 +60,19 @@ class ReverterCancelamentosVenda extends Command
         }
 
         foreach ($vendas as $venda) {
-            DB::transaction(function () use ($venda) {
+            DB::transaction(function () use ($venda, $estoque) {
                 foreach ($venda->itens as $item) {
-                    ProdutoEstoque::where('produto_id', $item->produto_id)
-                        ->where('loja_id', $venda->loja_id)
-                        ->decrement('quantidade', $item->quantidade);
+                    if ($item->produto && ! $item->produto->ehServico()) {
+                        $estoque->ajustarDelta(
+                            $item->produto,
+                            $venda->loja_id,
+                            -$item->quantidade,
+                            'venda',
+                            origemTipo: 'venda',
+                            origemId: $venda->id,
+                            observacao: 'Reversão de cancelamento via vendas:reverter-cancelamentos',
+                        );
+                    }
                 }
 
                 $venda->update(['status' => 'concluida']);

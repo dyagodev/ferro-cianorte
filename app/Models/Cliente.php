@@ -8,7 +8,21 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['nome', 'cpf_cnpj', 'telefone', 'endereco'])]
+#[Fillable([
+    'nome',
+    'cpf_cnpj',
+    'inscricao_estadual',
+    'telefone',
+    'endereco',
+    'cep',
+    'logradouro',
+    'numero',
+    'complemento',
+    'bairro',
+    'cidade',
+    'uf',
+    'codigo_municipio',
+])]
 class Cliente extends Model
 {
     use BelongsToEmpresa, HasFactory;
@@ -16,5 +30,22 @@ class Cliente extends Model
     public function vendas(): HasMany
     {
         return $this->hasMany(Venda::class);
+    }
+
+    /**
+     * NF-e exige endereço completo do destinatário (Spedy não aceita texto
+     * livre) — sem isso preenchido não dá pra emitir, então checamos antes
+     * de tentar (ver NfeController).
+     */
+    public function possuiEnderecoCompletoParaNfe(): bool
+    {
+        return filled($this->cpf_cnpj)
+            && filled($this->cep)
+            && filled($this->logradouro)
+            && filled($this->numero)
+            && filled($this->bairro)
+            && filled($this->cidade)
+            && filled($this->uf)
+            && filled($this->codigo_municipio);
     }
 }

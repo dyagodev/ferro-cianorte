@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Loja;
 use App\Models\MovimentacaoCaixa;
+use App\Models\MovimentacaoEstoque;
 use App\Models\Produto;
 use App\Models\Venda;
 use App\Models\VendaItem;
@@ -20,13 +22,10 @@ class RelatorioController extends Controller
     {
         [$inicio, $fim] = $this->periodo($request);
 
-        $query = Venda::with(['itens.produto', 'pagamentos', 'cliente', 'vendedor', 'loja'])
+        $query = Venda::with(['itens.produto', 'pagamentos', 'cliente', 'vendedor', 'loja', 'notasFiscais'])
             ->whereBetween('created_at', [$inicio, $fim])
+            ->whereIn('loja_id', $this->lojaIdsPermitidas($request))
             ->orderByDesc('created_at');
-
-        if ($lojaId = $request->integer('loja_id')) {
-            $query->where('loja_id', $lojaId);
-        }
 
         $vendas = $query->get();
         // Venda cancelada continua listada (auditoria/histórico), mas não
@@ -51,15 +50,13 @@ class RelatorioController extends Controller
     public function fechamentoCaixa(Request $request)
     {
         [$inicio, $fim] = $this->periodo($request);
+        $lojaIds = $this->lojaIdsPermitidas($request);
 
         $query = VendaPagamento::query()
             ->join('vendas', 'vendas.id', '=', 'venda_pagamentos.venda_id')
             ->whereBetween('vendas.created_at', [$inicio, $fim])
-            ->where('vendas.status', '!=', 'cancelada');
-
-        if ($lojaId = $request->integer('loja_id')) {
-            $query->where('vendas.loja_id', $lojaId);
-        }
+            ->where('vendas.status', '!=', 'cancelada')
+            ->whereIn('vendas.loja_id', $lojaIds);
 
         $porFormaPagamento = (clone $query)
             ->selectRaw('venda_pagamentos.forma_pagamento, sum(venda_pagamentos.valor) as total')
@@ -75,7 +72,7 @@ class RelatorioController extends Controller
         $quantidadeVendas = Venda::query()
             ->whereBetween('created_at', [$inicio, $fim])
             ->where('status', '!=', 'cancelada')
-            ->when($lojaId, fn ($q) => $q->where('loja_id', $lojaId))
+            ->whereIn('loja_id', $lojaIds)
             ->count();
 
         // Histórico de abertura/sangria/fechamento do período — é o que
@@ -84,7 +81,7 @@ class RelatorioController extends Controller
         $movimentacoes = MovimentacaoCaixa::query()
             ->with(['loja:id,nome', 'usuario:id,name'])
             ->whereBetween('created_at', [$inicio, $fim])
-            ->when($lojaId, fn ($q) => $q->where('loja_id', $lojaId))
+            ->whereIn('loja_id', $lojaIds)
             ->orderByDesc('created_at')
             ->get();
 
@@ -109,11 +106,8 @@ class RelatorioController extends Controller
             ->join('vendas', 'vendas.id', '=', 'venda_itens.venda_id')
             ->join('produtos', 'produtos.id', '=', 'venda_itens.produto_id')
             ->whereBetween('vendas.created_at', [$inicio, $fim])
-            ->where('vendas.status', '!=', 'cancelada');
-
-        if ($lojaId = $request->integer('loja_id')) {
-            $query->where('vendas.loja_id', $lojaId);
-        }
+            ->where('vendas.status', '!=', 'cancelada')
+            ->whereIn('vendas.loja_id', $this->lojaIdsPermitidas($request));
 
         $colunasOrdenacao = [
             'quantidade_total' => 'quantidade_total',
@@ -169,6 +163,58 @@ class RelatorioController extends Controller
         }
 
         return response()->json(['itens' => $itens]);
+    }
+
+    /**
+     * Histórico de movimentação de estoque (venda, cancelamento,
+     * transferência, sincronização do Link Pro, ajuste manual) — estilo o
+     * histórico que já existe no Link Pro (log_produto_qtd_estoque), ver
+     * EstoqueService pra quem grava cada linha.
+     */
+    public function historicoEstoque(Request $request)
+    {
+        $query = MovimentacaoEstoque::with(['produto:id,descricao,codigo_interno', 'loja:id,nome', 'usuario:id,name'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        if ($produtoId = $request->integer('produto_id')) {
+            $query->where('produto_id', $produtoId);
+        }
+
+        if ($lojaId = $request->integer('loja_id')) {
+            $query->where('loja_id', $lojaId);
+        }
+
+        if ($tipo = $request->string('tipo')->toString()) {
+            $query->where('tipo', $tipo);
+        }
+
+        if ($request->filled('data_inicio') || $request->filled('data_fim')) {
+            [$inicio, $fim] = $this->periodo($request);
+            $query->whereBetween('created_at', [$inicio, $fim]);
+        }
+
+        return $query->paginate($request->integer('per_page') ?: 30);
+    }
+
+    /**
+     * IDs de loja que o relatório pode enxergar. Venda já tem empresa_id
+     * (ver Venda::class), mas VendaPagamento/VendaItem/MovimentacaoCaixa
+     * não — e as queries desse controller usam join/query builder cru
+     * nelas, que não respeita EmpresaScope nenhum. Loja::query() já sai
+     * filtrada pelo tenant atual, então usar ela como base garante o
+     * isolamento mesmo se loja_id vier de outra empresa (pluck() dá vazio,
+     * whereIn([]) não bate com nada).
+     */
+    private function lojaIdsPermitidas(Request $request): array
+    {
+        $query = Loja::query();
+
+        if ($lojaId = $request->integer('loja_id')) {
+            $query->where('id', $lojaId);
+        }
+
+        return $query->pluck('id')->all();
     }
 
     /**

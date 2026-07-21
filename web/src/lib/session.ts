@@ -4,6 +4,7 @@ export const TOKEN_COOKIE = "pdv_token";
 export const ROLE_COOKIE = "pdv_role";
 export const LOJA_COOKIE = "pdv_loja_id";
 export const NAME_COOKIE = "pdv_name";
+export const SPEDY_COOKIE = "pdv_possui_spedy";
 
 export type Role = "admin" | "vendedor";
 
@@ -12,6 +13,7 @@ export type Session = {
   role: Role;
   lojaId: number | null;
   nome: string;
+  possuiSpedyConfigurado: boolean;
 };
 
 export async function getSession(): Promise<Session | null> {
@@ -30,5 +32,6 @@ export async function getSession(): Promise<Session | null> {
     role,
     lojaId: lojaIdRaw ? Number(lojaIdRaw) : null,
     nome: store.get(NAME_COOKIE)?.value ?? "",
+    possuiSpedyConfigurado: store.get(SPEDY_COOKIE)?.value === "1",
   };
 }

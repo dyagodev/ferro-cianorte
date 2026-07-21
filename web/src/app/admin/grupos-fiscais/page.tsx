@@ -18,6 +18,8 @@ const FORM_VAZIO = {
   aliquota_pis: "",
   cst_cofins: "",
   aliquota_cofins: "",
+  cst_ibscbs: "",
+  cclasstrib_ibscbs: "",
 };
 
 export default function GruposFiscaisPage() {
@@ -65,6 +67,8 @@ export default function GruposFiscaisPage() {
       aliquota_pis: grupo.aliquota_pis ?? "",
       cst_cofins: grupo.cst_cofins ?? "",
       aliquota_cofins: grupo.aliquota_cofins ?? "",
+      cst_ibscbs: grupo.cst_ibscbs ?? "",
+      cclasstrib_ibscbs: grupo.cclasstrib_ibscbs ?? "",
     });
     setErro(null);
     setModalAberto(true);
@@ -86,6 +90,8 @@ export default function GruposFiscaisPage() {
       aliquota_pis: form.aliquota_pis === "" ? null : Number(form.aliquota_pis),
       cst_cofins: form.cst_cofins || null,
       aliquota_cofins: form.aliquota_cofins === "" ? null : Number(form.aliquota_cofins),
+      cst_ibscbs: form.cst_ibscbs || null,
+      cclasstrib_ibscbs: form.cclasstrib_ibscbs || null,
     };
 
     try {
@@ -321,6 +327,35 @@ export default function GruposFiscaisPage() {
                   step="0.01"
                   value={form.aliquota_cofins}
                   onChange={(e) => campo("aliquota_cofins", e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <p className="mb-1 text-sm font-medium text-slate-600">IBS / CBS (Reforma Tributária)</p>
+            <p className="mb-2 text-xs text-slate-400">
+              Usado em NFC-e e NF-e de lojas com Regime Normal — Simples Nacional não precisa preencher ainda (entra em
+              vigor só em jan/2027). Deixe em branco pra usar o padrão (000 / 000001 — tributação integral, o caso
+              mais comum).
+            </p>
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">CST IBS/CBS</label>
+                <input
+                  value={form.cst_ibscbs}
+                  onChange={(e) => campo("cst_ibscbs", e.target.value)}
+                  maxLength={3}
+                  placeholder="000"
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">cClassTrib</label>
+                <input
+                  value={form.cclasstrib_ibscbs}
+                  onChange={(e) => campo("cclasstrib_ibscbs", e.target.value)}
+                  maxLength={6}
+                  placeholder="000001"
                   className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
                 />
               </div>

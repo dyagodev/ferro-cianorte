@@ -13,6 +13,7 @@
             <thead>
                 <tr>
                     <th>Nome</th>
+                    <th>CNPJ</th>
                     <th>Lojas</th>
                     <th>Usuários</th>
                     <th>Status</th>
@@ -23,6 +24,7 @@
                 @forelse ($empresas as $empresa)
                     <tr>
                         <td>{{ $empresa->nome }}</td>
+                        <td>{{ $empresa->cnpj ?? '—' }}</td>
                         <td>{{ $empresa->lojas_count }}</td>
                         <td>{{ $empresa->users_count }}</td>
                         <td>
@@ -41,7 +43,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" style="text-align:center; color:#6b7280; padding: 24px;">
+                        <td colspan="6" style="text-align:center; color:#6b7280; padding: 24px;">
                             Nenhuma empresa cadastrada ainda.
                         </td>
                     </tr>

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Plus, ShieldCheck, UserRound, UsersRound } from "lucide-react";
+import { AlertCircle, Pencil, Plus, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { ModalCadastro } from "@/components/ModalCadastro";
@@ -8,15 +8,20 @@ import type { Loja } from "@/lib/types";
 
 type Funcionario = { id: number; name: string; email: string; role: "admin" | "vendedor"; loja_id: number | null };
 
+const FORM_VAZIO = {
+  name: "",
+  email: "",
+  password: "",
+  role: "vendedor" as "admin" | "vendedor",
+  loja_id: "",
+};
+
 export default function FuncionariosPage() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [lojas, setLojas] = useState<Loja[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "vendedor">("vendedor");
-  const [lojaId, setLojaId] = useState<string>("");
+  const [editando, setEditando] = useState<Funcionario | null>(null);
+  const [form, setForm] = useState(FORM_VAZIO);
   const [erro, setErro] = useState<string | null>(null);
 
   async function carregar() {
@@ -32,27 +37,54 @@ export default function FuncionariosPage() {
     carregar();
   }, []);
 
-  async function criar(event: React.FormEvent) {
+  function campo(chave: keyof typeof form, valor: string) {
+    setForm((atual) => ({ ...atual, [chave]: valor }));
+  }
+
+  function abrirCriacao() {
+    setEditando(null);
+    setForm(FORM_VAZIO);
+    setErro(null);
+    setModalAberto(true);
+  }
+
+  function abrirEdicao(funcionario: Funcionario) {
+    setEditando(funcionario);
+    setForm({
+      name: funcionario.name,
+      email: funcionario.email,
+      password: "",
+      role: funcionario.role,
+      loja_id: funcionario.loja_id ? String(funcionario.loja_id) : "",
+    });
+    setErro(null);
+    setModalAberto(true);
+  }
+
+  async function salvar(event: React.FormEvent) {
     event.preventDefault();
     setErro(null);
+
+    const payload: Record<string, unknown> = {
+      name: form.name,
+      email: form.email,
+      role: form.role,
+      loja_id: form.role === "vendedor" ? Number(form.loja_id) : null,
+    };
+    if (form.password) {
+      payload.password = form.password;
+    }
+
     try {
-      await apiFetch("funcionarios", {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          role,
-          loja_id: role === "vendedor" ? Number(lojaId) : null,
-        }),
-      });
-      setName("");
-      setEmail("");
-      setPassword("");
+      if (editando) {
+        await apiFetch(`funcionarios/${editando.id}`, { method: "PUT", body: JSON.stringify(payload) });
+      } else {
+        await apiFetch("funcionarios", { method: "POST", body: JSON.stringify(payload) });
+      }
       setModalAberto(false);
       await carregar();
     } catch {
-      setErro("Não foi possível criar o funcionário. Verifique os dados (e-mail único, loja obrigatória para vendedor).");
+      setErro("Não foi possível salvar o funcionário. Verifique os dados (e-mail único, loja obrigatória para vendedor).");
     }
   }
 
@@ -64,10 +96,7 @@ export default function FuncionariosPage() {
           Funcionários
         </h2>
         <button
-          onClick={() => {
-            setErro(null);
-            setModalAberto(true);
-          }}
+          onClick={abrirCriacao}
           className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
         >
           <Plus className="h-4 w-4" />
@@ -89,21 +118,34 @@ export default function FuncionariosPage() {
                 <p className="text-sm text-slate-500">{funcionario.email}</p>
               </div>
             </div>
-            <span className="text-sm text-slate-500">
-              {funcionario.role === "admin" ? "Admin" : `Vendedor — ${lojas.find((l) => l.id === funcionario.loja_id)?.nome ?? "?"}`}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-500">
+                {funcionario.role === "admin" ? "Admin" : `Vendedor — ${lojas.find((l) => l.id === funcionario.loja_id)?.nome ?? "?"}`}
+              </span>
+              <button
+                onClick={() => abrirEdicao(funcionario)}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                title="Editar"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            </div>
           </li>
         ))}
       </ul>
 
       {modalAberto && (
-        <ModalCadastro titulo="Novo Funcionário" icone={UsersRound} onFechar={() => setModalAberto(false)}>
-          <form onSubmit={criar}>
+        <ModalCadastro
+          titulo={editando ? "Editar Funcionário" : "Novo Funcionário"}
+          icone={UsersRound}
+          onFechar={() => setModalAberto(false)}
+        >
+          <form onSubmit={salvar}>
             <label className="mb-1 block text-sm text-slate-500">Nome</label>
             <input
               autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={form.name}
+              onChange={(e) => campo("name", e.target.value)}
               required
               className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
             />
@@ -111,37 +153,40 @@ export default function FuncionariosPage() {
             <label className="mb-1 block text-sm text-slate-500">E-mail</label>
             <input
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={form.email}
+              onChange={(e) => campo("email", e.target.value)}
               required
               className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
             />
 
-            <label className="mb-1 block text-sm text-slate-500">Senha</label>
+            <label className="mb-1 block text-sm text-slate-500">
+              Senha{editando ? " (deixe em branco pra manter a atual)" : ""}
+            </label>
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+              autoComplete="new-password"
+              value={form.password}
+              onChange={(e) => campo("password", e.target.value)}
+              required={!editando}
               className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
             />
 
             <label className="mb-1 block text-sm text-slate-500">Papel</label>
             <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as "admin" | "vendedor")}
+              value={form.role}
+              onChange={(e) => campo("role", e.target.value)}
               className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
             >
               <option value="vendedor">Vendedor</option>
               <option value="admin">Admin</option>
             </select>
 
-            {role === "vendedor" && (
+            {form.role === "vendedor" && (
               <>
                 <label className="mb-1 block text-sm text-slate-500">Loja</label>
                 <select
-                  value={lojaId}
-                  onChange={(e) => setLojaId(e.target.value)}
+                  value={form.loja_id}
+                  onChange={(e) => campo("loja_id", e.target.value)}
                   required
                   className="mb-4 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
                 >
@@ -175,7 +220,7 @@ export default function FuncionariosPage() {
                 className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500"
               >
                 <Plus className="h-4 w-4" />
-                Cadastrar
+                {editando ? "Salvar" : "Cadastrar"}
               </button>
             </div>
           </form>

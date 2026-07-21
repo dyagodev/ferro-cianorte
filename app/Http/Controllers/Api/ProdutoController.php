@@ -7,7 +7,9 @@ use App\Models\Produto;
 use App\Models\ProdutoEstoque;
 use App\Services\EstoqueService;
 use App\Support\Texto;
+use App\Support\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ProdutoController extends Controller
 {
@@ -143,8 +145,14 @@ class ProdutoController extends Controller
     private function validated(Request $request, ?int $ignoreId = null): array
     {
         return $request->validate([
-            'codigo_barras' => ['nullable', 'string', 'max:255', 'unique:produtos,codigo_barras,'.($ignoreId ?? 'NULL').',id'],
-            'codigo_interno' => ['nullable', 'string', 'max:255', 'unique:produtos,codigo_interno,'.($ignoreId ?? 'NULL').',id'],
+            'codigo_barras' => [
+                'nullable', 'string', 'max:255',
+                Rule::unique('produtos', 'codigo_barras')->where('empresa_id', TenantContext::id())->ignore($ignoreId),
+            ],
+            'codigo_interno' => [
+                'nullable', 'string', 'max:255',
+                Rule::unique('produtos', 'codigo_interno')->where('empresa_id', TenantContext::id())->ignore($ignoreId),
+            ],
             'descricao' => ['required', 'string', 'max:255'],
             'unidade' => ['nullable', 'string', 'max:10'],
             'tipo' => ['nullable', 'string', 'max:50'],

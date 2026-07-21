@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Loja;
+use App\Models\Municipio;
 use App\Services\SpedyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use NFePHP\Common\Certificate;
 use Throwable;
 
@@ -15,6 +17,48 @@ class LojaController extends Controller
     public function index()
     {
         return Loja::orderBy('nome')->get();
+    }
+
+    /**
+     * Consulta CNPJ na BrasilAPI (pública, sem chave) pra preencher razão
+     * social e endereço estruturado direto no formulário de loja — mesma
+     * ideia já usada em EmpresaController::consultarCnpj, mas devolvendo os
+     * campos separados (a loja usa endereço estruturado de verdade pro
+     * MDF-e, não só um texto livre). "codigo_municipio" da BrasilAPI é um
+     * código interno da Receita, não o do IBGE que a gente usa — o certo é
+     * "codigo_municipio_ibge". Cruza com a tabela local de municípios pra
+     * devolver nome/UF no mesmo padrão do BuscaMunicipio (BrasilAPI manda
+     * o nome em CAIXA ALTA sem acento consistente).
+     */
+    public function consultarCnpj(string $cnpj): JsonResponse
+    {
+        $cnpjLimpo = preg_replace('/\D/', '', $cnpj);
+
+        if (strlen($cnpjLimpo) !== 14) {
+            return response()->json(['message' => 'CNPJ inválido.'], 422);
+        }
+
+        $resposta = Http::timeout(10)->get("https://brasilapi.com.br/api/cnpj/v1/{$cnpjLimpo}");
+
+        if (! $resposta->ok()) {
+            return response()->json(['message' => 'CNPJ não encontrado.'], 404);
+        }
+
+        $dados = $resposta->json();
+        $codigoIbge = $dados['codigo_municipio_ibge'] ?? null;
+        $municipio = $codigoIbge ? Municipio::where('codigo_ibge', (string) $codigoIbge)->first() : null;
+
+        return response()->json([
+            'razao_social' => $dados['razao_social'] ?? null,
+            'cep' => $dados['cep'] ?? null,
+            'logradouro' => $dados['logradouro'] ?? null,
+            'numero' => $dados['numero'] ?? null,
+            'complemento' => $dados['complemento'] ?? null,
+            'bairro' => $dados['bairro'] ?? null,
+            'cidade' => $municipio->nome ?? $dados['municipio'] ?? null,
+            'uf' => $municipio->uf ?? $dados['uf'] ?? null,
+            'codigo_municipio' => $codigoIbge ? (string) $codigoIbge : null,
+        ]);
     }
 
     public function store(Request $request)

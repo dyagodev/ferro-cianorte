@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Administração: apenas role admin.
     Route::middleware('role:admin')->group(function () {
+        Route::get('/lojas/consulta-cnpj/{cnpj}', [LojaController::class, 'consultarCnpj']);
         Route::apiResource('lojas', LojaController::class);
         Route::post('/lojas/{loja}/spedy-certificado', [LojaController::class, 'enviarCertificado']);
         Route::post('/lojas/{loja}/certificado-fiscal', [LojaController::class, 'enviarCertificadoFiscal']);

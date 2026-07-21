@@ -75,6 +75,7 @@ export default function LojasPage() {
   const [editando, setEditando] = useState<Loja | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
   const [erro, setErro] = useState<string | null>(null);
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
 
   async function carregar() {
     setLojas(await apiFetch<Loja[]>("lojas"));
@@ -86,6 +87,48 @@ export default function LojasPage() {
 
   function campo(chave: keyof typeof form, valor: string | boolean) {
     setForm((atual) => ({ ...atual, [chave]: valor }));
+  }
+
+  async function buscarCnpj() {
+    const cnpjLimpo = form.cnpj.replace(/\D/g, "");
+    if (cnpjLimpo.length !== 14) {
+      setErro("Digite um CNPJ válido (14 dígitos) pra buscar.");
+      return;
+    }
+
+    setBuscandoCnpj(true);
+    setErro(null);
+
+    try {
+      const dados = await apiFetch<{
+        razao_social: string | null;
+        cep: string | null;
+        logradouro: string | null;
+        numero: string | null;
+        complemento: string | null;
+        bairro: string | null;
+        cidade: string | null;
+        uf: string | null;
+        codigo_municipio: string | null;
+      }>(`lojas/consulta-cnpj/${cnpjLimpo}`);
+
+      setForm((atual) => ({
+        ...atual,
+        razao_social: dados.razao_social ?? atual.razao_social,
+        cep: dados.cep ?? atual.cep,
+        logradouro: dados.logradouro ?? atual.logradouro,
+        numero: dados.numero ?? atual.numero,
+        complemento: dados.complemento ?? atual.complemento,
+        bairro: dados.bairro ?? atual.bairro,
+        cidade: dados.cidade ?? atual.cidade,
+        uf: dados.uf ?? atual.uf,
+        codigo_municipio: dados.codigo_municipio ?? atual.codigo_municipio,
+      }));
+    } catch {
+      setErro("CNPJ não encontrado.");
+    } finally {
+      setBuscandoCnpj(false);
+    }
   }
 
   function abrirCriacao() {
@@ -276,12 +319,23 @@ export default function LojasPage() {
             <div className="mb-3 grid grid-cols-4 gap-3">
               <div>
                 <label className="mb-1 block text-sm text-slate-500">CNPJ</label>
-                <input
-                  value={form.cnpj}
-                  onChange={(e) => campo("cnpj", e.target.value)}
-                  placeholder="pode ser diferente da matriz"
-                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                />
+                <div className="flex gap-1">
+                  <input
+                    value={form.cnpj}
+                    onChange={(e) => campo("cnpj", e.target.value)}
+                    placeholder="pode ser diferente da matriz"
+                    className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={buscarCnpj}
+                    disabled={buscandoCnpj}
+                    title="Buscar dados do CNPJ e preencher o resto automaticamente"
+                    className="shrink-0 rounded border border-slate-300 bg-white px-2 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    {buscandoCnpj ? "..." : "Buscar"}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-500">Inscrição Estadual</label>
@@ -311,61 +365,57 @@ export default function LojasPage() {
               />
             </div>
 
-            {editando && (
-              <>
-                <p className="mb-2 text-sm font-medium text-slate-700">
-                  Endereço estruturado (necessário pra emitir MDF-e)
-                </p>
-                <div className="mb-3 grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="mb-1 block text-sm text-slate-500">CEP</label>
-                    <input
-                      value={form.cep}
-                      onChange={(e) => campo("cep", e.target.value)}
-                      className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="mb-1 block text-sm text-slate-500">
-                      Buscar cidade {form.cidade && `— selecionada: ${form.cidade}/${form.uf}`}
-                    </label>
-                    <BuscaMunicipio
-                      onSelecionar={(municipio) => {
-                        campo("cidade", municipio.nome);
-                        campo("codigo_municipio", municipio.codigo_ibge);
-                        campo("uf", municipio.uf);
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="mb-4 grid grid-cols-4 gap-3">
-                  <div className="col-span-2">
-                    <label className="mb-1 block text-sm text-slate-500">Logradouro</label>
-                    <input
-                      value={form.logradouro}
-                      onChange={(e) => campo("logradouro", e.target.value)}
-                      className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-slate-500">Número</label>
-                    <input
-                      value={form.numero}
-                      onChange={(e) => campo("numero", e.target.value)}
-                      className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-slate-500">Bairro</label>
-                    <input
-                      value={form.bairro}
-                      onChange={(e) => campo("bairro", e.target.value)}
-                      className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
+            <p className="mb-2 text-sm font-medium text-slate-700">
+              Endereço estruturado (necessário pra emitir MDF-e) — o botão &ldquo;Buscar&rdquo; no CNPJ acima já preenche
+            </p>
+            <div className="mb-3 grid grid-cols-3 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">CEP</label>
+                <input
+                  value={form.cep}
+                  onChange={(e) => campo("cep", e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="mb-1 block text-sm text-slate-500">
+                  Buscar cidade {form.cidade && `— selecionada: ${form.cidade}/${form.uf}`}
+                </label>
+                <BuscaMunicipio
+                  onSelecionar={(municipio) => {
+                    campo("cidade", municipio.nome);
+                    campo("codigo_municipio", municipio.codigo_ibge);
+                    campo("uf", municipio.uf);
+                  }}
+                />
+              </div>
+            </div>
+            <div className="mb-4 grid grid-cols-4 gap-3">
+              <div className="col-span-2">
+                <label className="mb-1 block text-sm text-slate-500">Logradouro</label>
+                <input
+                  value={form.logradouro}
+                  onChange={(e) => campo("logradouro", e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Número</label>
+                <input
+                  value={form.numero}
+                  onChange={(e) => campo("numero", e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Bairro</label>
+                <input
+                  value={form.bairro}
+                  onChange={(e) => campo("bairro", e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
 
             {editando && (
               <div className="mb-4 flex items-center gap-2">

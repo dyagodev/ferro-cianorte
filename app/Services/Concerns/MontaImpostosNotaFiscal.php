@@ -23,6 +23,10 @@ trait MontaImpostosNotaFiscal
 
     private const CODIGOS_ICMS_NORMAL_SEM_VALOR = ['40', '41', '50'];
 
+    // CST cuja tag ICMS exige pRedBC preenchido (percentual de redução da
+    // base de cálculo) — obrigatório no XSD mesmo quando o percentual é 0.
+    private const CODIGOS_ICMS_COM_REDUCAO_BC = ['20', '70', '90'];
+
     private const CODIGOS_PIS_COFINS_ISENTOS = ['04', '05', '06', '07', '08', '09'];
 
     // CST 000 = tributação integral (LC 214/2025) — o único código que essa
@@ -95,8 +99,20 @@ trait MontaImpostosNotaFiscal
         $aliquota = $grupo?->aliquota_icms ? (float) $grupo->aliquota_icms : 0.0;
         $std->modBC = 3;
         $std->vBC = $totalItem;
+
+        // CST 20 (e 70/90, mesma mecânica) exige a tag pRedBC — sem redução
+        // configurada no grupo fiscal (padrão 0%, até o contador confirmar
+        // o percentual real), a base não reduz mas a tag ainda precisa ir
+        // preenchida (a lib rejeita a nota com <pRedBC/> vazio, é campo
+        // obrigatório no XSD pra esse CST, mesmo sem redução de verdade).
+        if (in_array($cst, self::CODIGOS_ICMS_COM_REDUCAO_BC, true)) {
+            $percentualReducao = $grupo?->percentual_reducao_bc ? (float) $grupo->percentual_reducao_bc : 0.0;
+            $std->pRedBC = $percentualReducao;
+            $std->vBC = round($totalItem * (1 - $percentualReducao / 100), 2);
+        }
+
         $std->pICMS = $aliquota;
-        $std->vICMS = round($totalItem * $aliquota / 100, 2);
+        $std->vICMS = round($std->vBC * $aliquota / 100, 2);
 
         return [$std, $std->vBC, $std->vICMS];
     }

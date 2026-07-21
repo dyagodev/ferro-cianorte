@@ -25,6 +25,7 @@ export type GrupoFiscal = {
   cfop_fora_estado: string | null;
   csosn: string | null;
   cst_icms: string | null;
+  percentual_reducao_bc: string | null;
   aliquota_icms: string | null;
   cst_pis: string | null;
   aliquota_pis: string | null;

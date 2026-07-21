@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cfop_fora_estado',
     'csosn',
     'cst_icms',
+    'percentual_reducao_bc',
     'aliquota_icms',
     'cst_pis',
     'aliquota_pis',
@@ -32,6 +33,7 @@ class GrupoFiscal extends Model
     protected function casts(): array
     {
         return [
+            'percentual_reducao_bc' => 'decimal:2',
             'aliquota_icms' => 'decimal:2',
             'aliquota_pis' => 'decimal:2',
             'aliquota_cofins' => 'decimal:2',

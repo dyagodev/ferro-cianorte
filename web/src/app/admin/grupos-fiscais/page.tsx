@@ -13,6 +13,7 @@ const FORM_VAZIO = {
   cfop_fora_estado: "",
   csosn: "",
   cst_icms: "",
+  percentual_reducao_bc: "",
   aliquota_icms: "",
   cst_pis: "",
   aliquota_pis: "",
@@ -62,6 +63,7 @@ export default function GruposFiscaisPage() {
       cfop_fora_estado: grupo.cfop_fora_estado ?? "",
       csosn: grupo.csosn ?? "",
       cst_icms: grupo.cst_icms ?? "",
+      percentual_reducao_bc: grupo.percentual_reducao_bc ?? "",
       aliquota_icms: grupo.aliquota_icms ?? "",
       cst_pis: grupo.cst_pis ?? "",
       aliquota_pis: grupo.aliquota_pis ?? "",
@@ -85,6 +87,7 @@ export default function GruposFiscaisPage() {
       cfop_fora_estado: form.cfop_fora_estado || null,
       csosn: form.csosn || null,
       cst_icms: form.cst_icms || null,
+      percentual_reducao_bc: form.percentual_reducao_bc === "" ? null : Number(form.percentual_reducao_bc),
       aliquota_icms: form.aliquota_icms === "" ? null : Number(form.aliquota_icms),
       cst_pis: form.cst_pis || null,
       aliquota_pis: form.aliquota_pis === "" ? null : Number(form.aliquota_pis),
@@ -181,6 +184,7 @@ export default function GruposFiscaisPage() {
                 <td className="px-3 py-2 text-slate-500">
                   {grupo.csosn ? `CSOSN ${grupo.csosn}` : grupo.cst_icms ? `CST ${grupo.cst_icms}` : "—"}
                   {grupo.aliquota_icms ? ` (${grupo.aliquota_icms}%)` : ""}
+                  {grupo.percentual_reducao_bc ? ` — red. BC ${grupo.percentual_reducao_bc}%` : ""}
                 </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   <button
@@ -254,7 +258,7 @@ export default function GruposFiscaisPage() {
             </div>
 
             <p className="mb-1 text-sm font-medium text-slate-600">ICMS</p>
-            <div className="mb-3 grid grid-cols-3 gap-3">
+            <div className="mb-3 grid grid-cols-4 gap-3">
               <div>
                 <label className="mb-1 block text-xs text-slate-500">CSOSN (Simples)</label>
                 <input
@@ -272,6 +276,17 @@ export default function GruposFiscaisPage() {
                   onChange={(e) => campo("cst_icms", e.target.value)}
                   maxLength={2}
                   placeholder="00"
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Redução BC % (só CST 20/70/90)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.percentual_reducao_bc}
+                  onChange={(e) => campo("percentual_reducao_bc", e.target.value)}
+                  placeholder="0"
                   className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
                 />
               </div>

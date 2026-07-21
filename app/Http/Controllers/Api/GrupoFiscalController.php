@@ -65,6 +65,7 @@ class GrupoFiscalController extends Controller
             'cfop_fora_estado' => ['nullable', 'string', 'max:4'],
             'csosn' => ['nullable', 'string', 'max:3'],
             'cst_icms' => ['nullable', 'string', 'max:2'],
+            'percentual_reducao_bc' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'aliquota_icms' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'cst_pis' => ['nullable', 'string', 'max:2'],
             'aliquota_pis' => ['nullable', 'numeric', 'min:0', 'max:100'],

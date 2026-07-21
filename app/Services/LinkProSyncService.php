@@ -23,10 +23,17 @@ use Throwable;
  * VendaController::sync usava quando o agente empurrava via HTTP — agora é
  * tudo em processo, sem chamada de API.
  *
- * Estoque é 100% guiado por movimentação (log_produto_qtd_estoque, ver
- * QUERY_ESTOQUE) — nunca lemos "quantidade atual" do Link Pro no ciclo
- * normal. A única exceção é reconciliarEstoqueCompleto(), acionada só pelo
- * botão de forçar sincronização (rede de segurança, não roda sozinha).
+ * Estoque é 100% guiado pelo valor ABSOLUTO atual (produto.qtd_estoque),
+ * lido a cada ciclo — não por um log incremental. Chegamos nisso depois de
+ * confirmar contra o schema real (pg_get_viewdef de vw_movimentacao_estoque_item,
+ * 2026-07-21) que log_produto_qtd_estoque só registra "Ajuste Manual" e
+ * "Ajuste c/ Motivo": venda, entrada de mercadoria, transferência entre
+ * lojas e devolução NUNCA passam por aquela tabela, então um sync
+ * incremental baseado nela ficava cego pra praticamente todo movimento
+ * real — confirmado com um caso de produção (produto código 372: sistema
+ * mostrava 130, real no Link Pro era 10, cursor do log já estava em dia).
+ * produto.qtd_estoque, por outro lado, é mantido pelo próprio Link Pro
+ * considerando todos os tipos de movimento — é a fonte de verdade.
  *
  * As queries abaixo são as confirmadas contra o schema real do Link Pro
  * (InkDB) em sync-agent/queries/*.sql — ver aquele README pra contexto de
@@ -131,43 +138,16 @@ class LinkProSyncService
         where c.id_negociacao = any(?::bigint[])
         SQL;
 
-    // log_produto_qtd_estoque tem UM registro pra toda mudança de estoque —
-    // venda, entrada de mercadoria, ajuste manual, contagem, balança, tanto
-    // faz o motivo. Por isso essa query NÃO filtra por
-    // id_ajuste_estoque_motivo (chegou a filtrar só ajuste manual numa
-    // versão antiga, mas isso perdia entrada de mercadoria lançada por um
-    // caminho que não preenche esse campo) — trazemos toda movimentação, e
-    // quem decide o que fazer com ela é sincronizarEstoque(): aplica como
-    // DELTA (qtd_estoque_novo - qtd_estoque_antigo), nunca como valor
-    // absoluto. Isso também é o motivo de registrarVenda() não decrementar
-    // estoque na hora pra venda vinda do Link Pro: o próprio log dela chega
-    // aqui e já cobre o decremento, decrementar nos dois lugares duplicaria.
-    private const QUERY_ESTOQUE = <<<'SQL'
-        select
-          l.id_log_produto_qtd_estoque as id,
-          p.produto_codigo    as codigo_interno,
-          l.qtd_estoque_antigo as quantidade_antiga,
-          l.qtd_estoque_novo   as quantidade,
-          l.data_hora          as atualizado_em,
-          p.descricao          as descricao,
-          p.cean               as codigo_barras,
-          coalesce(u.descricao, 'UN') as unidade,
-          p.preco_custo        as preco_custo,
-          p.preco_venda        as preco_venda_cadastro
-        from log_produto_qtd_estoque l
-        join produto p on p.id_produto = l.id_produto
-        left join prod_unidade u on u.id_prod_unidade = p.id_prod_unidade
-        where (l.data_hora, l.id_log_produto_qtd_estoque) > (?::timestamp, ?::bigint)
-        order by l.data_hora asc, l.id_log_produto_qtd_estoque asc
-        limit 500
-        SQL;
-
-    // Reconciliação completa: lê o estoque ATUAL direto de produto.qtd_estoque
-    // (não o histórico) — mais pesada, mas não depende do cursor incremental
-    // ter alcançado o presente. Usada como rede de segurança quando o volume
-    // de mudanças na loja é maior que o que o incremental consegue processar
-    // por ciclo (limit 500 de QUERY_ESTOQUE), o que faz o cursor nunca
-    // alcançar o "agora" de verdade.
+    // Lê o estoque ATUAL direto de produto.qtd_estoque — não existe mais
+    // uma versão "incremental" separada baseada em log_produto_qtd_estoque:
+    // aquela tabela só registra "Ajuste Manual"/"Ajuste c/ Motivo" (venda,
+    // entrada de mercadoria, transferência e devolução nunca passam por
+    // ela, confirmado via pg_get_viewdef de vw_movimentacao_estoque_item em
+    // 2026-07-21), então um sync incremental em cima dela ficava cego pra
+    // praticamente todo movimento real. produto.qtd_estoque é mantido pelo
+    // próprio Link Pro considerando todos os tipos de movimento — é a
+    // única fonte confiável, por isso é lida a cada ciclo (ver
+    // aplicarReconciliacaoEstoque()), não só sob demanda.
     private const QUERY_ESTOQUE_COMPLETO = <<<'SQL'
         select
           p.produto_codigo as codigo_interno,
@@ -227,7 +207,7 @@ class LinkProSyncService
     {
         return $this->executar($conexao, 'incremental', function ($origem) use ($conexao) {
             $vendasSincronizadas = $this->sincronizarVendas($conexao, $origem);
-            $estoqueAtualizado = $this->sincronizarEstoque($conexao, $origem);
+            $estoqueAtualizado = $this->aplicarReconciliacaoEstoque($conexao, $origem);
             $this->sincronizarCatalogoLoja($conexao, $origem);
 
             return [$vendasSincronizadas, $estoqueAtualizado];
@@ -243,120 +223,98 @@ class LinkProSyncService
      */
     public function reconciliarEstoqueCompleto(SyncConexao $conexao): SyncExecucao
     {
-        return $this->executar($conexao, 'reconciliacao_completa', function ($origem) use ($conexao) {
-            $registros = $origem->select(self::QUERY_ESTOQUE_COMPLETO);
-            $atualizados = 0;
-            $produtoIdsEncontrados = [];
+        return $this->executar($conexao, 'reconciliacao_completa', fn ($origem) => [0, $this->aplicarReconciliacaoEstoque($conexao, $origem)]);
+    }
 
-            // O Link Pro nunca fica sabendo de venda feita direto no nosso
-            // próprio caixa (venda "nativa", sem sync_conexao_id) — o valor
-            // absoluto de produto.qtd_estoque dele, então, sempre vem mais
-            // alto do que a realidade por exatamente essa quantidade.
-            // Descontamos aqui em vez de sobrescrever cego, senão toda
-            // reconciliação apagaria as vendas feitas por fora do Link Pro.
-            // Venda cancelada já teve o estoque estornado (VendaController::cancelar)
-            // — contar ela aqui também descontaria a mesma quantidade duas vezes.
-            $vendidoNativamentePorProduto = \App\Models\VendaItem::query()
-                ->join('vendas', 'vendas.id', '=', 'venda_itens.venda_id')
-                ->where('vendas.loja_id', $conexao->loja_id)
-                ->whereNull('vendas.sync_conexao_id')
-                ->where('vendas.status', '!=', 'cancelada')
-                ->groupBy('venda_itens.produto_id')
-                ->selectRaw('venda_itens.produto_id, sum(venda_itens.quantidade) as total')
-                ->pluck('total', 'produto_id');
+    /**
+     * Lógica compartilhada entre o ciclo normal (sincronizar(), a cada
+     * minuto) e reconciliarEstoqueCompleto() (botão de forçar
+     * sincronização) — as duas fazem exatamente a mesma coisa hoje, a
+     * diferença é só de contexto/nome do tipo de execução gravado.
+     */
+    private function aplicarReconciliacaoEstoque(SyncConexao $conexao, Connection $origem): int
+    {
+        $registros = $origem->select(self::QUERY_ESTOQUE_COMPLETO);
+        $atualizados = 0;
+        $produtoIdsEncontrados = [];
 
-            foreach ($registros as $registro) {
-                $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
-                if (! $produtoId) {
-                    $this->avisos[] = "Reconciliação: produto \"{$registro->codigo_interno}\" não encontrado, ajuste ignorado.";
+        // O Link Pro nunca fica sabendo de venda feita direto no nosso
+        // próprio caixa (venda "nativa", sem sync_conexao_id) — o valor
+        // absoluto de produto.qtd_estoque dele, então, sempre vem mais
+        // alto do que a realidade por exatamente essa quantidade.
+        // Descontamos aqui em vez de sobrescrever cego, senão toda
+        // reconciliação apagaria as vendas feitas por fora do Link Pro.
+        // Venda cancelada já teve o estoque estornado (VendaController::cancelar)
+        // — contar ela aqui também descontaria a mesma quantidade duas vezes.
+        $vendidoNativamentePorProduto = \App\Models\VendaItem::query()
+            ->join('vendas', 'vendas.id', '=', 'venda_itens.venda_id')
+            ->where('vendas.loja_id', $conexao->loja_id)
+            ->whereNull('vendas.sync_conexao_id')
+            ->where('vendas.status', '!=', 'cancelada')
+            ->groupBy('venda_itens.produto_id')
+            ->selectRaw('venda_itens.produto_id, sum(venda_itens.quantidade) as total')
+            ->pluck('total', 'produto_id');
 
-                    continue;
-                }
+        foreach ($registros as $registro) {
+            $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
+            if (! $produtoId) {
+                $this->avisos[] = "Reconciliação: produto \"{$registro->codigo_interno}\" não encontrado, ajuste ignorado.";
 
-                $produtoIdsEncontrados[] = $produtoId;
+                continue;
+            }
 
-                $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$produtoId] ?? 0);
-                $quantidadeCorrigida = (float) $registro->quantidade - $vendidoNativamente;
+            $produtoIdsEncontrados[] = $produtoId;
 
+            $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$produtoId] ?? 0);
+            $quantidadeCorrigida = (float) $registro->quantidade - $vendidoNativamente;
+
+            $this->estoque->definirAbsoluto(
+                Produto::find($produtoId),
+                $conexao->loja_id,
+                $quantidadeCorrigida,
+                'reconciliacao_linkpro',
+                origemTipo: 'sync_conexao',
+                origemId: $conexao->id,
+            );
+
+            $atualizados++;
+        }
+
+        // Essa leitura é a lista COMPLETA de produtos ativos com estoque
+        // nessa loja de origem — qualquer produto que já tinha registro
+        // aqui pra essa loja mas não apareceu agora não existe mais lá
+        // (removido/desativado no Link Pro) ou zerou, então zera aqui
+        // também em vez de deixar um valor antigo parado pra sempre (0
+        // do Link Pro menos o que foi vendido nativamente, mesma
+        // correção de cima — senão apagaria venda nativa desse produto).
+        $faltantes = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
+            ->whereNotIn('produto_id', $produtoIdsEncontrados)
+            ->get();
+
+        $zerados = 0;
+        foreach ($faltantes as $estoqueFaltante) {
+            $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$estoqueFaltante->produto_id] ?? 0);
+            $quantidadeCorrigida = 0 - $vendidoNativamente;
+
+            if ((float) $estoqueFaltante->quantidade !== $quantidadeCorrigida) {
                 $this->estoque->definirAbsoluto(
-                    Produto::find($produtoId),
+                    $estoqueFaltante->produto,
                     $conexao->loja_id,
                     $quantidadeCorrigida,
                     'reconciliacao_linkpro',
                     origemTipo: 'sync_conexao',
                     origemId: $conexao->id,
+                    observacao: 'Produto não encontrado mais na origem (Link Pro) — zerado.',
                 );
-
-                $atualizados++;
+                $zerados++;
             }
+        }
 
-            // Essa leitura é a lista COMPLETA de produtos ativos com estoque
-            // nessa loja de origem — qualquer produto que já tinha registro
-            // aqui pra essa loja mas não apareceu agora não existe mais lá
-            // (removido/desativado no Link Pro) ou zerou, então zera aqui
-            // também em vez de deixar um valor antigo parado pra sempre (0
-            // do Link Pro menos o que foi vendido nativamente, mesma
-            // correção de cima — senão apagaria venda nativa desse produto).
-            $faltantes = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
-                ->whereNotIn('produto_id', $produtoIdsEncontrados)
-                ->get();
+        if ($zerados > 0) {
+            $this->avisos[] = "Reconciliação: {$zerados} produto(s) zerado(s) por não terem sido encontrados na origem.";
+        }
 
-            $zerados = 0;
-            foreach ($faltantes as $estoqueFaltante) {
-                $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$estoqueFaltante->produto_id] ?? 0);
-                $quantidadeCorrigida = 0 - $vendidoNativamente;
-
-                if ((float) $estoqueFaltante->quantidade !== $quantidadeCorrigida) {
-                    $this->estoque->definirAbsoluto(
-                        $estoqueFaltante->produto,
-                        $conexao->loja_id,
-                        $quantidadeCorrigida,
-                        'reconciliacao_linkpro',
-                        origemTipo: 'sync_conexao',
-                        origemId: $conexao->id,
-                        observacao: 'Produto não encontrado mais na origem (Link Pro) — zerado.',
-                    );
-                    $zerados++;
-                }
-            }
-
-            if ($zerados > 0) {
-                $this->avisos[] = "Reconciliação: {$zerados} produto(s) zerado(s) por não terem sido encontrados na origem.";
-            }
-
-            return [0, $atualizados + $zerados];
-        });
-    }
-
-    /**
-     * Avança o cursor de estoque (log_produto_qtd_estoque) pro ponto mais
-     * recente que existe AGORA na origem, sem aplicar delta nenhum — é um
-     * "marcador de página", não uma sincronização. Feito sob demanda,
-     * explicitamente pelo operador (nunca sozinho), pra situação em que o
-     * histórico acumulado não deve ser reprocessado (ex.: cursor ficou pra
-     * trás por um bug já corrigido, e reprocessar aplicaria de novo
-     * movimento de venda que já foi contabilizado por outro caminho antes
-     * do fix — ver ESCOPO ATUAL). Depois disso, sincronizarEstoque() só
-     * pega movimento novo, o que ficou pra trás fica pra trás de propósito.
-     */
-    public function marcarEstoqueComoAtual(SyncConexao $conexao): SyncExecucao
-    {
-        return $this->executar($conexao, 'marcar_estoque_atual', function (Connection $origem) use ($conexao) {
-            $ultimo = $origem->selectOne('select id_log_produto_qtd_estoque as id, data_hora from log_produto_qtd_estoque order by data_hora desc, id_log_produto_qtd_estoque desc limit 1');
-
-            if (! $ultimo) {
-                $this->avisos[] = 'Nenhuma movimentação encontrada na origem — cursor não alterado.';
-
-                return [0, 0];
-            }
-
-            $conexao->ultima_atualizacao_estoque = $ultimo->data_hora;
-            $conexao->ultimo_id_estoque = $ultimo->id;
-
-            $this->avisos[] = "Cursor de estoque avançado pra {$ultimo->data_hora} (id {$ultimo->id}) — histórico anterior a isso não será reprocessado.";
-
-            return [0, 0];
-        });
+        return $atualizados + $zerados;
     }
 
     /**
@@ -449,9 +407,9 @@ class LinkProSyncService
      * Busca vendas novas (id > checkpoint, data >= sync_desde) e replica
      * cada uma seguindo a mesma regra de VendaController::registrarVenda —
      * idempotente por uuid, preserva a data real da venda. Não decrementa
-     * estoque aqui (ver registrarVenda/sincronizarEstoque): quem faz isso é
-     * a sincronização de movimentação, lendo o próprio log dessa venda no
-     * Link Pro.
+     * estoque aqui: o impacto dessa venda no estoque já está refletido em
+     * produto.qtd_estoque, lido por aplicarReconciliacaoEstoque() no mesmo
+     * ciclo — decrementar aqui também duplicaria.
      */
     private function sincronizarVendas(SyncConexao $conexao, Connection $origem): int
     {
@@ -658,12 +616,10 @@ class LinkProSyncService
 
             $produtos = Produto::whereIn('id', array_column($itens, 'produto_id'))->get()->keyBy('id');
 
-            // NÃO decrementa estoque aqui: a venda que acabou de acontecer
-            // no Link Pro já gerou o próprio registro dela em
-            // log_produto_qtd_estoque (ver QUERY_ESTOQUE) — quem aplica o
-            // impacto no estoque é sincronizarEstoque(), lendo esse
-            // movimento como qualquer outro (entrada, ajuste, venda, tanto
-            // faz). Decrementar os dois lugares duplicaria a baixa.
+            // NÃO decrementa estoque aqui: o impacto dessa venda já está
+            // refletido em produto.qtd_estoque, lido por
+            // aplicarReconciliacaoEstoque() no mesmo ciclo — decrementar
+            // aqui também duplicaria a baixa.
             foreach ($itens as $item) {
                 $venda->itens()->create([
                     'produto_id' => $item['produto_id'],
@@ -678,61 +634,6 @@ class LinkProSyncService
                 $venda->pagamentos()->create($pagamento);
             }
         });
-    }
-
-    /**
-     * TODA movimentação de estoque do Link Pro dessa loja (venda, entrada
-     * de mercadoria, ajuste manual, contagem, balança — ver QUERY_ESTOQUE),
-     * aplicada como DELTA (qtd_estoque_novo - qtd_estoque_antigo), nunca
-     * como valor absoluto — overwrite apagaria uma venda feita direto no
-     * nosso próprio caixa que aconteceu entre uma sincronização e outra, já
-     * que o Link Pro nunca fica sabendo dela. É essa função, e não mais
-     * registrarVenda(), que decrementa estoque de venda vinda do Link Pro
-     * (ver comentário lá).
-     */
-    private function sincronizarEstoque(SyncConexao $conexao, Connection $origem): int
-    {
-        $desde = $conexao->ultima_atualizacao_estoque?->format('Y-m-d H:i:s') ?? '1970-01-01 00:00:00';
-        $ultimoId = $conexao->ultimo_id_estoque ?? 0;
-
-        $registros = $origem->select(self::QUERY_ESTOQUE, [$desde, $ultimoId]);
-        if (empty($registros)) {
-            return 0;
-        }
-
-        $atualizados = 0;
-
-        foreach ($registros as $registro) {
-            $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
-            if (! $produtoId) {
-                $this->avisos[] = "Estoque: produto \"{$registro->codigo_interno}\" não encontrado, ajuste ignorado.";
-            } else {
-                $delta = (float) $registro->quantidade - (float) $registro->quantidade_antiga;
-
-                if ($delta !== 0.0) {
-                    $this->estoque->ajustarDelta(
-                        Produto::find($produtoId),
-                        $conexao->loja_id,
-                        $delta,
-                        'sincronizacao_linkpro',
-                        origemTipo: 'sync_conexao',
-                        origemId: $conexao->id,
-                    );
-
-                    $atualizados++;
-                }
-            }
-
-            // Avança o cursor a CADA linha, não só uma vez no fim do lote —
-            // se uma linha mais à frente falhar (exceção não tratada) e
-            // interromper o loop, as anteriores já processadas com sucesso
-            // não voltam a ser reaplicadas na tentativa seguinte.
-            $conexao->ultima_atualizacao_estoque = $registro->atualizado_em;
-            $conexao->ultimo_id_estoque = $registro->id;
-            $conexao->save();
-        }
-
-        return $atualizados;
     }
 
     /**

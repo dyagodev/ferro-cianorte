@@ -15,10 +15,10 @@ Artisan::command('inspire', function () {
 // funcionamento configurado em cada uma.
 Schedule::command('sync:lojas')->everyMinute()->withoutOverlapping(10);
 
-// Reconciliação completa (mais pesada — lê a tabela de produtos inteira de
-// cada loja) roda de madrugada, fora do horário de funcionamento
-// configurado em qualquer loja, pra corrigir qualquer divergência que o
-// incremental não tenha alcançado ainda (ver ReconciliarEstoqueLojasLinkPro).
+// sync:lojas já roda a mesma reconciliação completa a cada minuto (ver
+// LinkProSyncService::aplicarReconciliacaoEstoque) — essa aqui de madrugada
+// é redundante de propósito, uma segunda rede de segurança fora do horário
+// de funcionamento de qualquer loja, sem custo real por rodar só 1x/dia.
 // ->timezone() é necessário porque o servidor roda em UTC (config('app.timezone'))
 // — sem isso, "03:00" dispararia às 3h UTC = meia-noite em Brasília.
 Schedule::command('sync:reconciliar-estoque')
@@ -26,7 +26,7 @@ Schedule::command('sync:reconciliar-estoque')
     ->timezone('America/Sao_Paulo')
     ->withoutOverlapping(30);
 
-// O incremental roda a cada minuto — sem expurgo, sync_execucoes cresce sem
+// sync:lojas roda a cada minuto — sem expurgo, sync_execucoes cresce sem
 // parar (~1440 linhas/dia por conexão). Mantém só as últimas 48h.
 Schedule::command('sync:limpar-execucoes')
     ->dailyAt('04:00')

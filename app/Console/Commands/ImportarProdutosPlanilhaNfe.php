@@ -92,6 +92,12 @@ class ImportarProdutosPlanilhaNfe extends Command
             }
 
             $ean = trim((string) ($linha['C'] ?? ''));
+            // "SEM GTIN" é texto da própria planilha (sem código de barras
+            // de verdade) — não é dígito nenhum, ctype_digit já filtra isso
+            // e qualquer outro texto não numérico junto.
+            if (! ctype_digit($ean)) {
+                $ean = '';
+            }
             $unidade = trim((string) ($linha['F'] ?? '')) ?: 'UN';
             $custo = (float) str_replace(',', '.', (string) ($linha['H'] ?? 0));
 
@@ -101,21 +107,38 @@ class ImportarProdutosPlanilhaNfe extends Command
                 continue;
             }
 
-            try {
-                $produto = Produto::updateOrCreate(
-                    ['codigo_interno' => (string) $codigo],
-                    [
-                        'descricao' => $descricao,
-                        'codigo_barras' => $ean !== '' ? $ean : null,
-                        'unidade' => $unidade,
-                        'preco_custo' => $custo,
-                        'preco_venda' => $custo,
-                        'ativo' => true,
-                    ],
-                );
+            $dadosProduto = [
+                'descricao' => $descricao,
+                'codigo_barras' => $ean !== '' ? $ean : null,
+                'unidade' => $unidade,
+                'preco_custo' => $custo,
+                'preco_venda' => $custo,
+                'ativo' => true,
+            ];
 
+            try {
+                $produto = Produto::updateOrCreate(['codigo_interno' => (string) $codigo], $dadosProduto);
                 $produto->wasRecentlyCreated ? $criados++ : $atualizados++;
             } catch (Throwable $e) {
+                // Mesmo EAN em mais de um código interno dentro da MESMA
+                // empresa (visto na prática: "PROMOCIONAL" reaproveitando o
+                // código de barras do fabricante do produto normal) —
+                // codigo_interno é o que identifica o produto aqui dentro,
+                // então tenta de novo sem o código de barras em vez de
+                // descartar o produto inteiro.
+                if (str_contains($e->getMessage(), 'codigo_barras')) {
+                    try {
+                        $dadosProduto['codigo_barras'] = null;
+                        $produto = Produto::updateOrCreate(['codigo_interno' => (string) $codigo], $dadosProduto);
+                        $produto->wasRecentlyCreated ? $criados++ : $atualizados++;
+                        $this->warn("{$codigo} ({$descricao}): EAN duplicado dentro da mesma empresa, salvo sem código de barras.");
+
+                        continue;
+                    } catch (Throwable $e2) {
+                        $e = $e2;
+                    }
+                }
+
                 $ignorados++;
                 $falhas[] = "{$codigo} ({$descricao}): {$e->getMessage()}";
             }

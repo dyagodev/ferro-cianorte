@@ -2,7 +2,7 @@
 
 import { AlertCircle, CheckCircle2, FileText, Plus, Send, Trash2, Truck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/apiClient";
 import { BuscaMunicipio } from "@/components/BuscaMunicipio";
 import { ModalCadastro } from "@/components/ModalCadastro";
@@ -60,6 +60,14 @@ const FORM_VAZIO = {
 };
 
 export default function ManifestosTransportePage() {
+  return (
+    <Suspense>
+      <ManifestosTransporteConteudo />
+    </Suspense>
+  );
+}
+
+function ManifestosTransporteConteudo() {
   const searchParams = useSearchParams();
   const transferenciaIdParam = searchParams.get("transferencia_id");
 

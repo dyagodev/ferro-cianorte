@@ -329,6 +329,37 @@ class LinkProSyncService
     }
 
     /**
+     * Avança o cursor de estoque (log_produto_qtd_estoque) pro ponto mais
+     * recente que existe AGORA na origem, sem aplicar delta nenhum — é um
+     * "marcador de página", não uma sincronização. Feito sob demanda,
+     * explicitamente pelo operador (nunca sozinho), pra situação em que o
+     * histórico acumulado não deve ser reprocessado (ex.: cursor ficou pra
+     * trás por um bug já corrigido, e reprocessar aplicaria de novo
+     * movimento de venda que já foi contabilizado por outro caminho antes
+     * do fix — ver ESCOPO ATUAL). Depois disso, sincronizarEstoque() só
+     * pega movimento novo, o que ficou pra trás fica pra trás de propósito.
+     */
+    public function marcarEstoqueComoAtual(SyncConexao $conexao): SyncExecucao
+    {
+        return $this->executar($conexao, 'marcar_estoque_atual', function (Connection $origem) use ($conexao) {
+            $ultimo = $origem->selectOne('select id_log_produto_qtd_estoque as id, data_hora from log_produto_qtd_estoque order by data_hora desc, id_log_produto_qtd_estoque desc limit 1');
+
+            if (! $ultimo) {
+                $this->avisos[] = 'Nenhuma movimentação encontrada na origem — cursor não alterado.';
+
+                return [0, 0];
+            }
+
+            $conexao->ultima_atualizacao_estoque = $ultimo->data_hora;
+            $conexao->ultimo_id_estoque = $ultimo->id;
+
+            $this->avisos[] = "Cursor de estoque avançado pra {$ultimo->data_hora} (id {$ultimo->id}) — histórico anterior a isso não será reprocessado.";
+
+            return [0, 0];
+        });
+    }
+
+    /**
      * Esqueleto comum a sincronizar() e reconciliarEstoqueCompleto(): cria o
      * registro de execução, abre/fecha a conexão dinâmica com a origem, e
      * grava resultado ou erro de forma uniforme.

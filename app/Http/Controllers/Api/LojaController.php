@@ -48,9 +48,16 @@ class LojaController extends Controller
         $codigoIbge = $dados['codigo_municipio_ibge'] ?? null;
         $municipio = $codigoIbge ? Municipio::where('codigo_ibge', (string) $codigoIbge)->first() : null;
 
+        // A BrasilAPI não é consistente no formato do CEP (já veio cru
+        // "64808648" e também formatado com ponto de milhar "64.800-004",
+        // 10 caracteres — estourava o max:9 da validação). Normaliza pra
+        // só dígitos e reformata sempre como XXXXX-XXX (9 caracteres).
+        $cepLimpo = preg_replace('/\D/', '', $dados['cep'] ?? '');
+        $cep = strlen($cepLimpo) === 8 ? substr($cepLimpo, 0, 5).'-'.substr($cepLimpo, 5) : null;
+
         return response()->json([
             'razao_social' => $dados['razao_social'] ?? null,
-            'cep' => $dados['cep'] ?? null,
+            'cep' => $cep,
             'logradouro' => $dados['logradouro'] ?? null,
             'numero' => $dados['numero'] ?? null,
             'complemento' => $dados['complemento'] ?? null,

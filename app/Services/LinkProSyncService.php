@@ -706,31 +706,31 @@ class LinkProSyncService
             $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
             if (! $produtoId) {
                 $this->avisos[] = "Estoque: produto \"{$registro->codigo_interno}\" não encontrado, ajuste ignorado.";
+            } else {
+                $delta = (float) $registro->quantidade - (float) $registro->quantidade_antiga;
 
-                continue;
+                if ($delta !== 0.0) {
+                    $this->estoque->ajustarDelta(
+                        Produto::find($produtoId),
+                        $conexao->loja_id,
+                        $delta,
+                        'sincronizacao_linkpro',
+                        origemTipo: 'sync_conexao',
+                        origemId: $conexao->id,
+                    );
+
+                    $atualizados++;
+                }
             }
 
-            $delta = (float) $registro->quantidade - (float) $registro->quantidade_antiga;
-            if ($delta === 0.0) {
-                continue;
-            }
-
-            $this->estoque->ajustarDelta(
-                Produto::find($produtoId),
-                $conexao->loja_id,
-                $delta,
-                'sincronizacao_linkpro',
-                origemTipo: 'sync_conexao',
-                origemId: $conexao->id,
-            );
-
-            $atualizados++;
+            // Avança o cursor a CADA linha, não só uma vez no fim do lote —
+            // se uma linha mais à frente falhar (exceção não tratada) e
+            // interromper o loop, as anteriores já processadas com sucesso
+            // não voltam a ser reaplicadas na tentativa seguinte.
+            $conexao->ultima_atualizacao_estoque = $registro->atualizado_em;
+            $conexao->ultimo_id_estoque = $registro->id;
+            $conexao->save();
         }
-
-        $ultimoRegistro = end($registros);
-        $conexao->ultima_atualizacao_estoque = $ultimoRegistro->atualizado_em;
-        $conexao->ultimo_id_estoque = $ultimoRegistro->id;
-        $conexao->save();
 
         return $atualizados;
     }

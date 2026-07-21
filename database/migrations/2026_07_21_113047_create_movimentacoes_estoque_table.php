@@ -17,6 +17,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Uma tentativa anterior dessa migration (antes do índice ganhar
+        // nome curto) chegou a criar a tabela com sucesso — só o ALTER TABLE
+        // do índice falhou depois, separado, então o Laravel nunca marcou
+        // essa migration como concluída. Sem esse dropIfExists, rodar de
+        // novo bate de frente com a tabela órfã ("table already exists").
+        // Ela nunca chegou a ser usada de verdade (nenhum código de
+        // produção rodou contra ela), então derrubar é seguro.
+        Schema::dropIfExists('movimentacoes_estoque');
+
         Schema::create('movimentacoes_estoque', function (Blueprint $table) {
             $table->id();
             $table->foreignId('empresa_id')->constrained('empresas');

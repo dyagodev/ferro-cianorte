@@ -95,3 +95,32 @@ curl -s https://ferro.dmtecnologia.com/desktop-updates/latest.yml
 Os arquivos antigos (versões anteriores) podem ficar parados na pasta sem
 problema — `autoindex off` esconde a listagem, e só o `latest.yml` importa
 pro `electron-updater` decidir o que baixar.
+
+## Publicar o próprio `/web` (site em nexus.dmtecnologia.com)
+
+O PDV acessado por navegador (não pelo app desktop) roda como um processo
+Node separado no servidor, gerenciado por **supervisor**
+(`/etc/supervisor/conf.d/nexus-web.conf`): `node server.js` na porta 3200
+(`www-data`, `LARAVEL_API_URL` fixo pra produção), com o nginx de
+`nexus.dmtecnologia.com` fazendo proxy_pass pra ele. Não tem CI/CD — é
+manual, e reaproveita o MESMO build standalone que o `dist:win`/`dist:mac`
+do desktop já gera:
+
+```bash
+cd desktop
+npm run dist:win   # (ou dist:mac) já builda e monta web-standalone/web/ com o /web mais recente
+
+rsync -az --delete web-standalone/web/ root@<ip-do-servidor>:/var/www/nexus-web/web/
+ssh root@<ip-do-servidor> "chown -R www-data:www-data /var/www/nexus-web/web/ && supervisorctl restart nexus-web"
+
+# confirma que subiu sem erro
+ssh root@<ip-do-servidor> "tail -n 30 /var/log/nexus-web.log"
+curl -sI https://nexus.dmtecnologia.com/
+```
+
+Se só o `/web` mudou (sem mudança no desktop), não precisa gerar o
+instalador nem tocar em `desktop-updates/` — só esse rsync + restart do
+supervisor. Uns erros de "Failed to find Server Action" podem aparecer no
+log logo depois do restart — são só abas de navegador que ainda estavam
+abertas com o build antigo tentando falar com o servidor novo, somem
+sozinhos quando a página recarrega.

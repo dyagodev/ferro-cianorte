@@ -164,6 +164,7 @@ export default function TransferenciasPage() {
                 <td className="px-3 py-2">
                   {t.nota_fiscal ? (
                     <span
+                      title={t.nota_fiscal.status === "rejected" ? (t.nota_fiscal.mensagem_retorno ?? undefined) : undefined}
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         t.nota_fiscal.status === "authorized"
                           ? "bg-emerald-100 text-emerald-700"

@@ -765,7 +765,8 @@ function VendaDetalhe({
       {role === "admin" && (notas.length > 0 || erroEmissao) && (
         <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm print:hidden">
           {notas.map((nota) => (
-            <div key={nota.id} className="flex items-center justify-between">
+            <div key={nota.id} className="border-b border-slate-200 py-1.5 last:border-0">
+            <div className="flex items-center justify-between">
               <span className="text-slate-600">{nota.tipo.toUpperCase()}</span>
               <span className="flex items-center gap-2">
                 {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
@@ -827,6 +828,10 @@ function VendaDetalhe({
                         : nota.status}
                 </span>
               </span>
+            </div>
+            {nota.status === "rejected" && nota.mensagem_retorno && (
+              <p className="mt-1 text-xs text-red-600">{nota.mensagem_retorno}</p>
+            )}
             </div>
           ))}
           {erroEmissao && (

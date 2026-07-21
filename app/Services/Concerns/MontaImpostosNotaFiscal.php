@@ -21,7 +21,14 @@ trait MontaImpostosNotaFiscal
     // grupo fiscal), o que duplicaria imposto já retido.
     private const CODIGOS_ICMS_SIMPLES_SEM_VALOR = ['102', '103', '300', '400', '500'];
 
-    private const CODIGOS_ICMS_NORMAL_SEM_VALOR = ['40', '41', '50'];
+    // 60 = ICMS já retido por substituição tributária (mesma lógica do 500
+    // no Simples, ver acima) — a tag ICMS60 do XSD só tem campo pra
+    // ICMS-ST RETIDO (vBCSTRet/vICMSSTRet, que não temos dado pra
+    // preencher), nunca vBC/vICMS "normal". Retornar valor aqui inflava o
+    // total (ICMSTot.vBC) sem nada correspondente em nenhuma tag de item,
+    // rejeitado pela SEFAZ como "Total da BC ICMS difere do somatorio dos
+    // itens" (visto na prática).
+    private const CODIGOS_ICMS_NORMAL_SEM_VALOR = ['40', '41', '50', '60'];
 
     // CST cuja tag ICMS exige pRedBC preenchido (percentual de redução da
     // base de cálculo) — obrigatório no XSD mesmo quando o percentual é 0.

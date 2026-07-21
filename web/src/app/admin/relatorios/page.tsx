@@ -497,7 +497,8 @@ function VendaDetalheModal({
           ) : (
             <ul className="space-y-1">
               {notas.map((nota) => (
-                <li key={nota.id} className="flex items-center justify-between text-sm">
+                <li key={nota.id} className="border-b border-slate-100 py-1 text-sm last:border-0">
+                <div className="flex items-center justify-between">
                   <span className="text-slate-600">{ROTULO_TIPO_NOTA[nota.tipo] ?? nota.tipo}</span>
                   <span className="flex items-center gap-2">
                     {(nota.tipo === "nfce" || nota.tipo === "nfe") && nota.status === "authorized" && (
@@ -543,6 +544,10 @@ function VendaDetalheModal({
                       {rotuloStatusNota(nota.status)}
                     </span>
                   </span>
+                </div>
+                  {nota.status === "rejected" && nota.mensagem_retorno && (
+                    <p className="mt-1 text-xs text-red-600">{nota.mensagem_retorno}</p>
+                  )}
                 </li>
               ))}
             </ul>

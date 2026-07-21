@@ -40,13 +40,19 @@ trait MontaImpostosNotaFiscal
     // service calcula valor de verdade pra IBS/CBS, ver montarIbsCbs().
     private const CST_IBSCBS_TRIBUTACAO_INTEGRAL = '000';
 
-    // Alíquotas de teste nacionais pro período de apuração informativa de
-    // 2026 (não são configuráveis por loja/produto, são fixadas por lei
-    // pra essa fase de transição — 0,1% de IBS total dividido meio a meio
-    // entre UF e Município, + 0,9% de CBS).
+    // Alíquotas de teste pro período de apuração informativa de 2026 (não
+    // são configuráveis por loja/produto). UF e CBS são fixadas por lei
+    // nacional (0,05% + 0,90%) e a SEFAZ aceita de qualquer estado. A parte
+    // municipal, porém, só existe quando o MUNICÍPIO específico já
+    // publicou sua própria alíquota de teste — a maioria ainda está "a
+    // definir" (confirmado na prática: Floriano/PI rejeitou "Alíquota do
+    // IBS do Município inválida" com 0,05%, só aceitando depois de trocar
+    // pra 0%). Sem uma tabela oficial de município aderente pra consultar,
+    // 0% é o padrão seguro até cada loja confirmar que seu município já
+    // publicou uma alíquota de teste real.
     private const ALIQUOTA_TESTE_IBS_UF_2026 = 0.05;
 
-    private const ALIQUOTA_TESTE_IBS_MUN_2026 = 0.05;
+    private const ALIQUOTA_TESTE_IBS_MUN_2026 = 0.0;
 
     private const ALIQUOTA_TESTE_CBS_2026 = 0.90;
 

@@ -45,7 +45,11 @@ return new class extends Migration
 
             $table->timestamp('created_at')->useCurrent();
 
-            $table->index(['empresa_id', 'produto_id', 'loja_id', 'created_at']);
+            // Nome curto explícito — o nome automático (com os 4 nomes de
+            // coluna concatenados) passa de 64 caracteres, limite do MySQL
+            // pra identificador (SQLite não reclama, por isso passou liso
+            // em dev).
+            $table->index(['empresa_id', 'produto_id', 'loja_id', 'created_at'], 'mov_estoque_consulta_idx');
         });
     }
 

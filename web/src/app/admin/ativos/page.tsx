@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, PawPrint, Pencil, Plus, Search } from "lucide-react";
+import { AlertCircle, Pencil, Plus, Search, Tag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { ModalCadastro } from "@/components/ModalCadastro";
@@ -93,8 +93,8 @@ export default function AtivosPage() {
     <div className="max-w-3xl text-slate-900">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <PawPrint className="h-5 w-5 text-blue-600" />
-          Ativos
+          <Tag className="h-5 w-5 text-blue-600" />
+          Itens do Cliente
         </h2>
         <button
           onClick={abrirCriacao}
@@ -117,12 +117,12 @@ export default function AtivosPage() {
 
       <ul className="divide-y divide-slate-200 rounded border border-slate-200">
         {ativos.length === 0 && (
-          <li className="px-4 py-8 text-center text-slate-500">Nenhum ativo encontrado{busca ? ` para "${busca}"` : ""}.</li>
+          <li className="px-4 py-8 text-center text-slate-500">Nenhum item encontrado{busca ? ` para "${busca}"` : ""}.</li>
         )}
         {ativos.map((ativo) => (
           <li key={ativo.id} className="flex items-center justify-between px-4 py-3">
             <span className="flex items-center gap-2">
-              <PawPrint className="h-4 w-4 text-slate-400" />
+              <Tag className="h-4 w-4 text-slate-400" />
               <span>
                 {ativo.nome}
                 {ativo.tipo && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">{ativo.tipo}</span>}
@@ -140,8 +140,8 @@ export default function AtivosPage() {
 
       {modalAberto && (
         <ModalCadastro
-          titulo={editando ? "Editar Ativo" : "Novo Ativo"}
-          icone={PawPrint}
+          titulo={editando ? "Editar Item do Cliente" : "Novo Item do Cliente"}
+          icone={Tag}
           onFechar={() => setModalAberto(false)}
         >
           <form onSubmit={salvar}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, PawPrint, Plus, ScanBarcode, Trash2, Wrench } from "lucide-react";
+import { AlertCircle, Plus, ScanBarcode, Tag, Trash2, Wrench } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/apiClient";
@@ -257,8 +257,8 @@ export default function NovaOrdemServicoPage() {
         </div>
         <div>
           <label className="mb-1 flex items-center gap-1 text-sm text-slate-500">
-            <PawPrint className="h-3.5 w-3.5" />
-            Ativo (opcional)
+            <Tag className="h-3.5 w-3.5" />
+            Item do cliente (opcional)
           </label>
           <select
             value={ativoId ?? ""}

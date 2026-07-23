@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowLeft, CheckCircle2, PawPrint, ReceiptText, Trash2, Wrench, XCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, ReceiptText, Tag, Trash2, Wrench, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -174,11 +174,11 @@ export default function DetalheOrdemServicoPage() {
           <p className="font-medium">{os.cliente?.nome ?? "—"}</p>
         </div>
         <div>
-          <p className="text-slate-500">Ativo</p>
+          <p className="text-slate-500">Item do cliente</p>
           <p className="flex items-center gap-1 font-medium">
             {os.ativo ? (
               <>
-                <PawPrint className="h-3.5 w-3.5 text-slate-400" />
+                <Tag className="h-3.5 w-3.5 text-slate-400" />
                 {os.ativo.nome}
               </>
             ) : (

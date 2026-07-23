@@ -10,7 +10,7 @@ import {
   IdCard,
   LayoutDashboard,
   Package,
-  PawPrint,
+  Tag,
   Receipt,
   Route,
   ShoppingBag,
@@ -58,7 +58,7 @@ const MENU: EntradaMenu[] = [
     itens: [
       { href: "/admin/ordens-servico", rotulo: "Ordens de Serviço", icone: Wrench },
       { href: "/admin/servicos", rotulo: "Serviços", icone: Wrench },
-      { href: "/admin/ativos", rotulo: "Ativos", icone: PawPrint },
+      { href: "/admin/ativos", rotulo: "Itens do Cliente", icone: Tag },
     ],
   },
   {

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, PawPrint, Plus, Wrench } from "lucide-react";
+import { AlertCircle, Plus, Tag, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
@@ -139,7 +139,7 @@ export default function OrdensServicoPage() {
                 <td className="px-3 py-2">
                   {os.ativo ? (
                     <span className="inline-flex items-center gap-1">
-                      <PawPrint className="h-3.5 w-3.5 text-slate-400" />
+                      <Tag className="h-3.5 w-3.5 text-slate-400" />
                       {os.ativo.nome}
                     </span>
                   ) : (

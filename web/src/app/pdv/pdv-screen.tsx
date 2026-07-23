@@ -204,6 +204,10 @@ export default function PdvScreen({
       }
       return [...atual, { chave, vendavel, quantidade: 1, precoVendido: Number(vendavel.item.preco_venda) }];
     });
+    // Limpa a busca (não só os resultados de produto) — serviço é
+    // calculado ao vivo a partir do texto digitado, então só sumir os
+    // "resultados" de produto não escondia a lista de serviço.
+    setBusca("");
     setResultados([]);
     buscaRef.current?.focus();
   }

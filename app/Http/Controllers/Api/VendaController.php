@@ -64,7 +64,7 @@ class VendaController extends Controller
             $this->emitirNotaSeConfigurado($venda);
         }
 
-        return response()->json($venda->load('itens', 'pagamentos'), 201);
+        return response()->json($venda->load('itens', 'pagamentos', 'notasFiscais'), 201);
     }
 
     /**

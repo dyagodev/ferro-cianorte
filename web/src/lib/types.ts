@@ -52,6 +52,56 @@ export type Cliente = {
   codigo_municipio: string | null;
 };
 
+export type Ativo = {
+  id: number;
+  cliente_id: number;
+  tipo: string | null;
+  nome: string;
+  identificador: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+  cliente?: { id: number; nome: string } | null;
+};
+
+export type StatusOrdemServico = "aberta" | "em_execucao" | "concluida" | "cancelada" | "faturada";
+
+export type OrdemServicoItem = {
+  id: number;
+  ordem_servico_id: number;
+  produto_id: number;
+  quantidade: string | number;
+  preco_unitario: string;
+  total: string;
+  produto?: { id: number; descricao: string } | null;
+};
+
+export type OrdemServico = {
+  id: number;
+  loja_id: number;
+  cliente_id: number;
+  ativo_id: number | null;
+  user_id: number;
+  profissional_id: number | null;
+  status: StatusOrdemServico;
+  descricao_problema: string | null;
+  observacoes: string | null;
+  data_abertura: string;
+  data_previsao: string | null;
+  data_conclusao: string | null;
+  venda_id: number | null;
+  subtotal: string;
+  desconto: string;
+  total: string;
+  itens?: OrdemServicoItem[];
+  itens_count?: number;
+  cliente?: { id: number; nome: string } | null;
+  ativo?: { id: number; nome: string; tipo: string | null } | null;
+  loja?: { id: number; nome: string } | null;
+  usuario?: { id: number; name: string } | null;
+  profissional?: { id: number; name: string } | null;
+  venda?: Venda | null;
+};
+
 export type Loja = {
   id: number;
   nome: string;

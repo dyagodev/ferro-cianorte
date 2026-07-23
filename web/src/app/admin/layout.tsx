@@ -10,6 +10,7 @@ import {
   IdCard,
   LayoutDashboard,
   Package,
+  PawPrint,
   Receipt,
   Route,
   ShoppingBag,
@@ -17,6 +18,7 @@ import {
   Truck,
   Users,
   UsersRound,
+  Wrench,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -48,6 +50,14 @@ const MENU: EntradaMenu[] = [
     itens: [
       { href: "/admin/grupos-fiscais", rotulo: "Grupos Fiscais", icone: Receipt },
       { href: "/admin/notas-fiscais", rotulo: "Notas Fiscais", icone: FileCheck2 },
+    ],
+  },
+  {
+    rotulo: "Serviços",
+    icone: Wrench,
+    itens: [
+      { href: "/admin/ordens-servico", rotulo: "Ordens de Serviço", icone: Wrench },
+      { href: "/admin/ativos", rotulo: "Ativos", icone: PawPrint },
     ],
   },
   {

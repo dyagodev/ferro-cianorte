@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\NotaFiscalController;
 use App\Http\Controllers\Api\ProdutoController;
 use App\Http\Controllers\Api\RelatorioController;
 use App\Http\Controllers\Api\SpedyWebhookController;
+use App\Http\Controllers\Api\AtivoController;
+use App\Http\Controllers\Api\OrdemServicoController;
 use App\Http\Controllers\Api\TransferenciaEstoqueController;
 use App\Http\Controllers\Api\VeiculoController;
 use App\Http\Controllers\Api\VendaController;
@@ -102,6 +104,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/transferencias-estoque/{transferencia}/confirmar-sem-nota', [TransferenciaEstoqueController::class, 'confirmarSemNota']);
         Route::post('/transferencias-estoque/{transferencia}/receber', [TransferenciaEstoqueController::class, 'receber']);
         Route::post('/transferencias-estoque/{transferencia}/cancelar', [TransferenciaEstoqueController::class, 'cancelar']);
+
+        // Módulo de Serviços: Ativo (Pet/Veículo/o que fizer sentido) e
+        // Ordem de Serviço, que vira Venda de verdade ao faturar (ver
+        // OrdemServicoService::faturar()).
+        Route::apiResource('ativos', AtivoController::class);
+        // Sem destroy: OS não se exclui, se cancela (ver cancelar() abaixo)
+        // — histórico de acompanhamento deve ficar registrado.
+        Route::apiResource('ordens-servico', OrdemServicoController::class)
+            ->parameters(['ordens-servico' => 'os'])
+            ->except(['destroy']);
+        Route::post('/ordens-servico/{os}/itens', [OrdemServicoController::class, 'adicionarItem']);
+        Route::delete('/ordens-servico/{os}/itens/{item}', [OrdemServicoController::class, 'removerItem']);
+        Route::post('/ordens-servico/{os}/status', [OrdemServicoController::class, 'mudarStatus']);
+        Route::post('/ordens-servico/{os}/faturar', [OrdemServicoController::class, 'faturar']);
+        Route::post('/ordens-servico/{os}/cancelar', [OrdemServicoController::class, 'cancelar']);
 
         Route::get('/relatorios/vendas', [RelatorioController::class, 'vendas']);
         Route::get('/relatorios/fechamento-caixa', [RelatorioController::class, 'fechamentoCaixa']);

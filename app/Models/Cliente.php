@@ -32,6 +32,11 @@ class Cliente extends Model
         return $this->hasMany(Venda::class);
     }
 
+    public function ativos(): HasMany
+    {
+        return $this->hasMany(Ativo::class);
+    }
+
     /**
      * NF-e exige endereço completo do destinatário (Spedy não aceita texto
      * livre) — sem isso preenchido não dá pra emitir, então checamos antes

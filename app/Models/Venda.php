@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['uuid', 'loja_id', 'sync_conexao_id', 'user_id', 'vendedor_externo_nome', 'cliente_id', 'subtotal', 'desconto', 'total', 'status', 'feita_offline'])]
+#[Fillable(['uuid', 'loja_id', 'sync_conexao_id', 'user_id', 'vendedor_externo_nome', 'cliente_id', 'ordem_servico_id', 'subtotal', 'desconto', 'total', 'status', 'feita_offline'])]
 class Venda extends Model
 {
     use BelongsToEmpresa, HasFactory;
@@ -38,6 +38,11 @@ class Venda extends Model
     public function vendedor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function ordemServico(): BelongsTo
+    {
+        return $this->belongsTo(OrdemServico::class);
     }
 
     public function cliente(): BelongsTo

@@ -43,9 +43,7 @@ export default function NovaTransferenciaPage() {
       return;
     }
     const timer = setTimeout(() => {
-      apiFetch<Produto[]>(`produtos?q=${encodeURIComponent(termo)}`).then((produtos) =>
-        setProdutosEncontrados(produtos.filter((p) => p.natureza !== "servico")),
-      );
+      apiFetch<Produto[]>(`produtos?q=${encodeURIComponent(termo)}`).then(setProdutosEncontrados);
     }, 300);
     return () => clearTimeout(timer);
   }, [buscaProduto]);

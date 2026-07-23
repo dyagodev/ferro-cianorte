@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['venda_id', 'produto_id', 'quantidade', 'preco_original', 'preco_unitario', 'total'])]
+#[Fillable(['venda_id', 'produto_id', 'servico_id', 'quantidade', 'preco_original', 'preco_unitario', 'total'])]
 class VendaItem extends Model
 {
     use HasFactory;
@@ -32,5 +32,15 @@ class VendaItem extends Model
     public function produto(): BelongsTo
     {
         return $this->belongsTo(Produto::class);
+    }
+
+    public function servico(): BelongsTo
+    {
+        return $this->belongsTo(Servico::class);
+    }
+
+    public function ehServico(): bool
+    {
+        return $this->servico_id !== null;
     }
 }

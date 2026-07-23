@@ -16,9 +16,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'descricao',
     'unidade',
     'tipo',
-    'natureza',
-    'codigo_servico_municipal',
-    'aliquota_iss',
     'grupo',
     'subgrupo',
     'marca',
@@ -55,7 +52,6 @@ class Produto extends Model
             'preco_custo' => 'decimal:2',
             'margem_percentual' => 'decimal:2',
             'preco_venda' => 'decimal:2',
-            'aliquota_iss' => 'decimal:2',
         ];
     }
 
@@ -67,11 +63,6 @@ class Produto extends Model
     public function grupoFiscal(): BelongsTo
     {
         return $this->belongsTo(GrupoFiscal::class);
-    }
-
-    public function ehServico(): bool
-    {
-        return $this->natureza === 'servico';
     }
 
     public function estoques(): HasMany

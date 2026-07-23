@@ -44,7 +44,7 @@ class SpedyService
         $venda->loadMissing(['itens.produto.grupoFiscal', 'pagamentos', 'cliente', 'loja.empresa']);
         $credenciais = $this->credenciaisObrigatorias($venda->loja);
 
-        $itensProduto = $venda->itens->filter(fn ($item) => ! $item->produto->ehServico());
+        $itensProduto = $venda->itens->filter(fn ($item) => ! $item->ehServico());
 
         if ($itensProduto->isEmpty()) {
             throw new RuntimeException('Venda não tem itens de produto para emitir NFC-e.');
@@ -82,7 +82,7 @@ class SpedyService
             throw new RuntimeException('Cliente sem CNPJ/endereço completo cadastrado — obrigatório para emitir NF-e.');
         }
 
-        $itensProduto = $venda->itens->filter(fn ($item) => ! $item->produto->ehServico());
+        $itensProduto = $venda->itens->filter(fn ($item) => ! $item->ehServico());
         if ($itensProduto->isEmpty()) {
             throw new RuntimeException('Venda não tem itens de produto para emitir NF-e.');
         }
@@ -103,13 +103,13 @@ class SpedyService
 
     /**
      * NFS-e (nota de serviço — frete, instalação, mão de obra). Só os itens
-     * marcados como natureza=servico no cadastro do produto.
+     * que vieram do catálogo de Serviço (ver VendaItem::ehServico()).
      */
     public function emitirNfse(Venda $venda): NotaFiscal
     {
-        $venda->loadMissing(['itens.produto', 'pagamentos', 'cliente', 'loja.empresa']);
+        $venda->loadMissing(['itens.servico', 'pagamentos', 'cliente', 'loja.empresa']);
         $credenciais = $this->credenciaisObrigatorias($venda->loja);
-        $itensServico = $venda->itens->filter(fn ($item) => $item->produto->ehServico());
+        $itensServico = $venda->itens->filter(fn ($item) => $item->ehServico());
 
         if ($itensServico->isEmpty()) {
             throw new RuntimeException('Venda não tem itens de serviço para emitir NFS-e.');
@@ -119,13 +119,13 @@ class SpedyService
             'integrationId' => $venda->uuid.'-nfse',
             'customer' => $this->dadosClienteSimplificado($venda),
             'services' => $itensServico->map(fn ($item) => [
-                'description' => $item->produto->descricao,
-                'cityServiceCode' => $item->produto->codigo_servico_municipal,
+                'description' => $item->servico->descricao,
+                'cityServiceCode' => $item->servico->codigo_servico_municipal,
                 'quantity' => (float) $item->quantidade,
                 'unitAmount' => (float) $item->preco_unitario,
                 'totalAmount' => (float) $item->total,
                 'iss' => [
-                    'rate' => $item->produto->aliquota_iss ? (float) $item->produto->aliquota_iss : null,
+                    'rate' => $item->servico->aliquota_iss ? (float) $item->servico->aliquota_iss : null,
                 ],
             ])->values()->all(),
             'totalAmount' => (float) $itensServico->sum('total'),

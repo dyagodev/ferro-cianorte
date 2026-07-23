@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { imprimir } from "@/lib/imprimir";
-import type { Cliente, Loja, Produto } from "@/lib/types";
+import type { Cliente, ItemVendavel, Loja, Produto, Servico } from "@/lib/types";
 import ClienteModal from "./cliente-modal";
 import Cupom, { type VendaConcluida } from "./cupom";
 import MenuModal from "./menu-modal";
@@ -29,10 +29,15 @@ import ProdutoModal from "./produto-modal";
 type TipoDesconto = "valor" | "percentual";
 
 type ItemCarrinho = {
-  produto: Produto;
+  chave: string;
+  vendavel: ItemVendavel;
   quantidade: number;
   precoVendido: number;
 };
+
+function chaveVendavel(vendavel: ItemVendavel): string {
+  return `${vendavel.tipo}-${vendavel.item.id}`;
+}
 
 export default function PdvScreen({
   role,
@@ -62,7 +67,8 @@ export default function PdvScreen({
   const [ultimaVenda, setUltimaVenda] = useState<VendaConcluida | null>(null);
   const [descontoTipo, setDescontoTipo] = useState<TipoDesconto>("valor");
   const [descontoTexto, setDescontoTexto] = useState("0");
-  const [quantidadeEditando, setQuantidadeEditando] = useState<Record<number, string>>({});
+  const [quantidadeEditando, setQuantidadeEditando] = useState<Record<string, string>>({});
+  const [servicosCatalogo, setServicosCatalogo] = useState<Servico[]>([]);
   const buscaRef = useRef<HTMLInputElement>(null);
 
   // Sempre carrega as lojas: admin escolhe em qual está vendendo, vendedor só usa
@@ -74,7 +80,16 @@ export default function PdvScreen({
         setLojaSelecionadaId((atual) => atual ?? dados.find((l) => l.ativo)?.id ?? dados[0]?.id ?? null);
       }
     });
+    // Serviço é catálogo pequeno — carrega tudo uma vez e busca client-side
+    // pelo mesmo termo do produto, sem round-trip extra por tecla.
+    apiFetch<Servico[]>("servicos").then(setServicosCatalogo);
   }, [role]);
+
+  const servicosResultados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (termo.length < 2) return [];
+    return servicosCatalogo.filter((s) => s.descricao.toLowerCase().includes(termo));
+  }, [busca, servicosCatalogo]);
 
   const lojaId = role === "admin" ? lojaSelecionadaId : lojaIdSessao;
   const lojaNome = lojas.find((loja) => loja.id === lojaId)?.nome ?? "DM Nexus";
@@ -160,9 +175,14 @@ export default function PdvScreen({
       const query = new URLSearchParams({ q: busca });
       if (role === "admin" && lojaId) query.set("loja_id", String(lojaId));
       const produtos = await apiFetch<Produto[]>(`produtos?${query.toString()}`);
+      const totalResultados = produtos.length + servicosResultados.length;
 
-      if (produtos.length === 1) {
-        adicionarAoCarrinho(produtos[0]);
+      if (totalResultados === 1) {
+        if (produtos.length === 1) {
+          adicionarAoCarrinho({ tipo: "produto", item: produtos[0] });
+        } else {
+          adicionarAoCarrinho({ tipo: "servico", item: servicosResultados[0] });
+        }
         setBusca("");
         setResultados([]);
       } else {
@@ -175,39 +195,34 @@ export default function PdvScreen({
     }
   }
 
-  function adicionarAoCarrinho(produto: Produto) {
+  function adicionarAoCarrinho(vendavel: ItemVendavel) {
+    const chave = chaveVendavel(vendavel);
     setCarrinho((atual) => {
-      const existente = atual.find((item) => item.produto.id === produto.id);
+      const existente = atual.find((item) => item.chave === chave);
       if (existente) {
-        return atual.map((item) =>
-          item.produto.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item,
-        );
+        return atual.map((item) => (item.chave === chave ? { ...item, quantidade: item.quantidade + 1 } : item));
       }
-      return [...atual, { produto, quantidade: 1, precoVendido: Number(produto.preco_venda) }];
+      return [...atual, { chave, vendavel, quantidade: 1, precoVendido: Number(vendavel.item.preco_venda) }];
     });
     setResultados([]);
     buscaRef.current?.focus();
   }
 
-  function atualizarQuantidade(produtoId: number, quantidade: number) {
+  function atualizarQuantidade(chave: string, quantidade: number) {
     if (!Number.isFinite(quantidade) || quantidade <= 0) {
       return;
     }
+    setCarrinho((atual) => atual.map((item) => (item.chave === chave ? { ...item, quantidade } : item)));
+  }
+
+  function atualizarPrecoVendido(chave: string, preco: number) {
     setCarrinho((atual) =>
-      atual.map((item) => (item.produto.id === produtoId ? { ...item, quantidade } : item)),
+      atual.map((item) => (item.chave === chave ? { ...item, precoVendido: Math.max(0, preco) } : item)),
     );
   }
 
-  function atualizarPrecoVendido(produtoId: number, preco: number) {
-    setCarrinho((atual) =>
-      atual.map((item) =>
-        item.produto.id === produtoId ? { ...item, precoVendido: Math.max(0, preco) } : item,
-      ),
-    );
-  }
-
-  function removerItem(produtoId: number) {
-    setCarrinho((atual) => atual.filter((item) => item.produto.id !== produtoId));
+  function removerItem(chave: string) {
+    setCarrinho((atual) => atual.filter((item) => item.chave !== chave));
   }
 
   async function handleLogout() {
@@ -227,7 +242,8 @@ export default function PdvScreen({
         loja_id: role === "admin" ? lojaId : undefined,
         desconto: descontoReais,
         itens: carrinho.map((item) => ({
-          produto_id: item.produto.id,
+          produto_id: item.vendavel.tipo === "produto" ? item.vendavel.item.id : null,
+          servico_id: item.vendavel.tipo === "servico" ? item.vendavel.item.id : null,
           quantidade: item.quantidade,
           preco_unitario: item.precoVendido,
         })),
@@ -243,9 +259,9 @@ export default function PdvScreen({
       vendedorNome: nomeUsuario,
       clienteNome: cliente?.nome ?? "não informado",
       itens: carrinho.map((item) => ({
-        descricao: item.produto.descricao,
+        descricao: item.vendavel.item.descricao,
         quantidade: item.quantidade,
-        precoOriginal: Number(item.produto.preco_venda),
+        precoOriginal: Number(item.vendavel.item.preco_venda),
         precoUnitario: item.precoVendido,
       })),
       pagamentos: pagamentos as VendaConcluida["pagamentos"],
@@ -341,12 +357,26 @@ export default function PdvScreen({
           </div>
           {buscando && <p className="mt-1 text-sm text-slate-500">Buscando...</p>}
 
-          {resultados.length > 0 && (
+          {(resultados.length > 0 || servicosResultados.length > 0) && (
             <ul className="absolute z-10 mt-1 w-full rounded border border-slate-300 bg-slate-50 shadow-xl">
-              {resultados.map((produto) => (
-                <li key={produto.id}>
+              {servicosResultados.map((servico) => (
+                <li key={`servico-${servico.id}`}>
                   <button
-                    onClick={() => adicionarAoCarrinho(produto)}
+                    onClick={() => adicionarAoCarrinho({ tipo: "servico", item: servico })}
+                    className="flex w-full items-center justify-between px-4 py-2 text-left text-slate-900 hover:bg-slate-100"
+                  >
+                    <span>
+                      {servico.descricao}
+                      <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
+                    </span>
+                    <span className="text-slate-500">R$ {Number(servico.preco_venda).toFixed(2)}</span>
+                  </button>
+                </li>
+              ))}
+              {resultados.map((produto) => (
+                <li key={`produto-${produto.id}`}>
+                  <button
+                    onClick={() => adicionarAoCarrinho({ tipo: "produto", item: produto })}
                     className="flex w-full items-center justify-between px-4 py-2 text-left text-slate-900 hover:bg-slate-100"
                   >
                     <span>{produto.descricao}</span>
@@ -386,30 +416,35 @@ export default function PdvScreen({
                 </tr>
               )}
               {carrinho.map((item) => (
-                <tr key={item.produto.id} className="divide-x divide-slate-200 border-t border-slate-200">
-                  <td className="px-3 py-2">{item.produto.descricao}</td>
+                <tr key={item.chave} className="divide-x divide-slate-200 border-t border-slate-200">
+                  <td className="px-3 py-2">
+                    {item.vendavel.item.descricao}
+                    {item.vendavel.tipo === "servico" && (
+                      <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <input
                       type="number"
                       min={0}
                       step="1"
-                      value={quantidadeEditando[item.produto.id] ?? String(item.quantidade)}
+                      value={quantidadeEditando[item.chave] ?? String(item.quantidade)}
                       onChange={(e) => {
                         const bruto = e.target.value;
-                        setQuantidadeEditando((atual) => ({ ...atual, [item.produto.id]: bruto }));
+                        setQuantidadeEditando((atual) => ({ ...atual, [item.chave]: bruto }));
                         const num = Number(bruto);
                         if (bruto !== "" && Number.isFinite(num) && num > 0) {
-                          atualizarQuantidade(item.produto.id, num);
+                          atualizarQuantidade(item.chave, num);
                         }
                       }}
                       onBlur={() => {
                         setQuantidadeEditando((atual) => {
-                          const bruto = atual[item.produto.id];
+                          const bruto = atual[item.chave];
                           const num = Number(bruto);
                           if (bruto === "" || !Number.isFinite(num) || num <= 0) {
-                            atualizarQuantidade(item.produto.id, 1);
+                            atualizarQuantidade(item.chave, 1);
                           }
-                          const { [item.produto.id]: _, ...resto } = atual;
+                          const { [item.chave]: _, ...resto } = atual;
                           return resto;
                         });
                       }}
@@ -422,23 +457,23 @@ export default function PdvScreen({
                       min={0}
                       step="0.01"
                       value={item.precoVendido}
-                      onChange={(e) => atualizarPrecoVendido(item.produto.id, Number(e.target.value))}
+                      onChange={(e) => atualizarPrecoVendido(item.chave, Number(e.target.value))}
                       className={`w-24 rounded border px-2 py-1 ${
-                        item.precoVendido !== Number(item.produto.preco_venda)
+                        item.precoVendido !== Number(item.vendavel.item.preco_venda)
                           ? "border-amber-400 bg-amber-50"
                           : "border-slate-300 bg-white"
                       }`}
                     />
-                    {item.precoVendido !== Number(item.produto.preco_venda) && (
+                    {item.precoVendido !== Number(item.vendavel.item.preco_venda) && (
                       <p className="text-xs text-slate-500 line-through">
-                        R$ {Number(item.produto.preco_venda).toFixed(2)}
+                        R$ {Number(item.vendavel.item.preco_venda).toFixed(2)}
                       </p>
                     )}
                   </td>
                   <td className="px-3 py-2">{(item.quantidade * item.precoVendido).toFixed(2)}</td>
                   <td className="px-3 py-2">
                     <button
-                      onClick={() => removerItem(item.produto.id)}
+                      onClick={() => removerItem(item.chave)}
                       className="flex items-center gap-1 text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -551,8 +586,8 @@ export default function PdvScreen({
         <ProdutoModal
           lojaId={lojaId}
           onFechar={() => setModalProdutoAberto(false)}
-          onSelecionar={(produto) => {
-            adicionarAoCarrinho(produto);
+          onSelecionar={(vendavel) => {
+            adicionarAoCarrinho(vendavel);
             setModalProdutoAberto(false);
           }}
         />

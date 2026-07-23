@@ -47,7 +47,7 @@ class OrdemServicoController extends Controller
 
     public function show(OrdemServico $os)
     {
-        return $os->load(['itens.produto', 'cliente', 'ativo', 'loja', 'usuario:id,name', 'profissional:id,name', 'venda']);
+        return $os->load(['itens.produto', 'itens.servico', 'cliente', 'ativo', 'loja', 'usuario:id,name', 'profissional:id,name', 'venda']);
     }
 
     public function update(Request $request, OrdemServico $os)
@@ -66,13 +66,14 @@ class OrdemServicoController extends Controller
 
         $os->update($data);
 
-        return $os->fresh(['itens.produto']);
+        return $os->fresh(['itens.produto', 'itens.servico']);
     }
 
     public function adicionarItem(Request $request, OrdemServico $os)
     {
         $data = $request->validate([
-            'produto_id' => ['required', Rule::exists('produtos', 'id')->where('empresa_id', TenantContext::id())],
+            'produto_id' => ['required_without:servico_id', 'prohibits:servico_id', 'nullable', Rule::exists('produtos', 'id')->where('empresa_id', TenantContext::id())],
+            'servico_id' => ['required_without:produto_id', 'nullable', Rule::exists('servicos', 'id')->where('empresa_id', TenantContext::id())],
             'quantidade' => ['required', 'numeric', 'min:0.001'],
             'preco_unitario' => ['required', 'numeric', 'min:0'],
         ]);
@@ -151,7 +152,8 @@ class OrdemServicoController extends Controller
             'observacoes' => ['nullable', 'string', 'max:2000'],
             'data_previsao' => ['nullable', 'date'],
             'itens' => ['nullable', 'array'],
-            'itens.*.produto_id' => ['required', Rule::exists('produtos', 'id')->where('empresa_id', TenantContext::id())],
+            'itens.*.produto_id' => ['required_without:itens.*.servico_id', 'prohibits:itens.*.servico_id', 'nullable', Rule::exists('produtos', 'id')->where('empresa_id', TenantContext::id())],
+            'itens.*.servico_id' => ['required_without:itens.*.produto_id', 'nullable', Rule::exists('servicos', 'id')->where('empresa_id', TenantContext::id())],
             'itens.*.quantidade' => ['required', 'numeric', 'min:0.001'],
             'itens.*.preco_unitario' => ['required', 'numeric', 'min:0'],
         ]);

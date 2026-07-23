@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['ordem_servico_id', 'produto_id', 'quantidade', 'preco_unitario', 'total'])]
+#[Fillable(['ordem_servico_id', 'produto_id', 'servico_id', 'quantidade', 'preco_unitario', 'total'])]
 class OrdemServicoItem extends Model
 {
     protected $table = 'ordem_servico_itens';
@@ -28,5 +28,15 @@ class OrdemServicoItem extends Model
     public function produto(): BelongsTo
     {
         return $this->belongsTo(Produto::class);
+    }
+
+    public function servico(): BelongsTo
+    {
+        return $this->belongsTo(Servico::class);
+    }
+
+    public function ehServico(): bool
+    {
+        return $this->servico_id !== null;
     }
 }

@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { CampoDinheiro } from "@/components/CampoDinheiro";
 import { ModalCadastro } from "@/components/ModalCadastro";
-import type { GrupoFiscal, Loja, NaturezaProduto, Produto } from "@/lib/types";
+import type { GrupoFiscal, Loja, Produto } from "@/lib/types";
 
 type EdicaoEstoque = { produtoId: number; lojaId: number };
 
@@ -32,20 +32,19 @@ type PaginaProdutos = {
 
 const POR_PAGINA = 30;
 
-type ColunaOpcional = "cod" | "natureza" | "grupoFiscal";
+type ColunaOpcional = "cod" | "grupoFiscal";
 
 const COLUNAS_OPCIONAIS: { chave: ColunaOpcional; rotulo: string }[] = [
   { chave: "cod", rotulo: "Código" },
-  { chave: "natureza", rotulo: "Natureza" },
   { chave: "grupoFiscal", rotulo: "Grupo Fiscal" },
 ];
 
 const COLUNAS_STORAGE_KEY = "dm-nexus-colunas-produtos";
 
-// Natureza e Grupo Fiscal ficam ocultos por padrão — só quem usa emissão
-// fiscal precisa ver essas colunas no dia a dia, o resto só polui a tabela.
+// Grupo Fiscal fica oculto por padrão — só quem usa emissão fiscal precisa
+// ver essa coluna no dia a dia, o resto só polui a tabela.
 function colunasPadrao(): Record<ColunaOpcional, boolean> {
-  return { cod: true, natureza: false, grupoFiscal: false };
+  return { cod: true, grupoFiscal: false };
 }
 
 const FORM_VAZIO = {
@@ -58,9 +57,6 @@ const FORM_VAZIO = {
   precoVenda: 0,
   estoqueMinimo: "",
   grupoFiscalId: "",
-  natureza: "produto" as NaturezaProduto,
-  codigoServicoMunicipal: "",
-  aliquotaIss: "",
 };
 
 export default function ProdutosPage() {
@@ -178,9 +174,6 @@ export default function ProdutosPage() {
       precoVenda: Number(produto.preco_venda) || 0,
       estoqueMinimo: "",
       grupoFiscalId: produto.grupo_fiscal_id ? String(produto.grupo_fiscal_id) : "",
-      natureza: produto.natureza ?? "produto",
-      codigoServicoMunicipal: produto.codigo_servico_municipal ?? "",
-      aliquotaIss: produto.aliquota_iss ?? "",
     });
     setErro(null);
     setModalAberto(true);
@@ -200,9 +193,6 @@ export default function ProdutosPage() {
       preco_venda: form.precoVenda,
       estoque_minimo: Number(form.estoqueMinimo) || 0,
       grupo_fiscal_id: form.grupoFiscalId ? Number(form.grupoFiscalId) : null,
-      natureza: form.natureza,
-      codigo_servico_municipal: form.natureza === "servico" ? form.codigoServicoMunicipal || null : null,
-      aliquota_iss: form.natureza === "servico" && form.aliquotaIss !== "" ? Number(form.aliquotaIss) : null,
     };
 
     try {
@@ -353,7 +343,6 @@ export default function ProdutosPage() {
             <tr className="divide-x divide-slate-200">
               <th className="px-3 py-2">Produto</th>
               {colunas.cod && <th className="px-3 py-2">Cod</th>}
-              {colunas.natureza && <th className="px-3 py-2">Natureza</th>}
               {colunas.grupoFiscal && <th className="px-3 py-2">Grupo Fiscal</th>}
               <th className="px-3 py-2">Preço</th>
               {lojasOrdenadas.map((loja) => (
@@ -375,17 +364,6 @@ export default function ProdutosPage() {
               <tr key={produto.id} className="divide-x divide-slate-200 border-t border-slate-200">
                 <td className="px-3 py-2">{produto.descricao}</td>
                 {colunas.cod && <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? "—"}</td>}
-                {colunas.natureza && (
-                  <td className="px-3 py-2">
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-xs font-medium ${
-                        produto.natureza === "servico" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {produto.natureza === "servico" ? "Serviço" : "Produto"}
-                    </span>
-                  </td>
-                )}
                 {colunas.grupoFiscal && (
                   <td className="px-3 py-2 text-slate-500">{produto.grupo_fiscal?.nome ?? "—"}</td>
                 )}
@@ -607,70 +585,19 @@ export default function ProdutosPage() {
               </div>
             </div>
 
-            <label className="mb-1 block text-sm text-slate-500">Natureza</label>
-            <div className="mb-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => campo("natureza", "produto")}
-                className={`rounded border px-3 py-2 text-sm ${
-                  form.natureza === "produto"
-                    ? "border-blue-500 bg-blue-600 text-white"
-                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                Produto
-              </button>
-              <button
-                type="button"
-                onClick={() => campo("natureza", "servico")}
-                className={`rounded border px-3 py-2 text-sm ${
-                  form.natureza === "servico"
-                    ? "border-blue-500 bg-blue-600 text-white"
-                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                Serviço
-              </button>
-            </div>
-
-            {form.natureza === "produto" ? (
-              <>
-                <label className="mb-1 block text-sm text-slate-500">Grupo fiscal</label>
-                <select
-                  value={form.grupoFiscalId}
-                  onChange={(e) => campo("grupoFiscalId", e.target.value)}
-                  className="mb-4 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                >
-                  <option value="">Nenhum</option>
-                  {gruposFiscais.map((grupo) => (
-                    <option key={grupo.id} value={grupo.id}>
-                      {grupo.nome}
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : (
-              <div className="mb-4 grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm text-slate-500">Cód. serviço municipal (LC 116)</label>
-                  <input
-                    value={form.codigoServicoMunicipal}
-                    onChange={(e) => campo("codigoServicoMunicipal", e.target.value)}
-                    className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm text-slate-500">Alíquota ISS %</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.aliquotaIss}
-                    onChange={(e) => campo("aliquotaIss", e.target.value)}
-                    className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            )}
+            <label className="mb-1 block text-sm text-slate-500">Grupo fiscal</label>
+            <select
+              value={form.grupoFiscalId}
+              onChange={(e) => campo("grupoFiscalId", e.target.value)}
+              className="mb-4 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            >
+              <option value="">Nenhum</option>
+              {gruposFiscais.map((grupo) => (
+                <option key={grupo.id} value={grupo.id}>
+                  {grupo.nome}
+                </option>
+              ))}
+            </select>
 
             {erro && (
               <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">

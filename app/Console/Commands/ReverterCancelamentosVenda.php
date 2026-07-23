@@ -62,7 +62,7 @@ class ReverterCancelamentosVenda extends Command
         foreach ($vendas as $venda) {
             DB::transaction(function () use ($venda, $estoque) {
                 foreach ($venda->itens as $item) {
-                    if ($item->produto && ! $item->produto->ehServico()) {
+                    if ($item->produto && ! $item->ehServico()) {
                         $estoque->ajustarDelta(
                             $item->produto,
                             $venda->loja_id,

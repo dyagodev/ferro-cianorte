@@ -150,11 +150,13 @@ export default function RelatoriosPage() {
 
 type VendaItemResumo = {
   id: number;
-  produto_id: number;
+  produto_id: number | null;
+  servico_id: number | null;
   quantidade: string | number;
   preco_unitario: string;
   total: string;
   produto: { descricao: string } | null;
+  servico?: { descricao: string } | null;
 };
 
 type VendaResumo = {
@@ -581,7 +583,7 @@ function VendaDetalheModal({
             <tbody>
               {venda.itens.map((item) => (
                 <tr key={item.id} className="divide-x divide-slate-200 border-t border-slate-200 text-slate-900">
-                  <td className="px-3 py-2">{item.produto?.descricao ?? `#${item.produto_id}`}</td>
+                  <td className="px-3 py-2">{item.produto?.descricao ?? item.servico?.descricao ?? `#${item.produto_id ?? item.servico_id}`}</td>
                   <td className="px-3 py-2">{Number(item.quantidade)}</td>
                   <td className="px-3 py-2">R$ {Number(item.preco_unitario).toFixed(2)}</td>
                   <td className="px-3 py-2">R$ {Number(item.total).toFixed(2)}</td>

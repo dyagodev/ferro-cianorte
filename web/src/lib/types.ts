@@ -1,5 +1,3 @@
-export type NaturezaProduto = "produto" | "servico";
-
 export type Produto = {
   id: number;
   codigo_barras: string | null;
@@ -8,14 +6,26 @@ export type Produto = {
   unidade: string;
   preco_venda: string;
   preco_custo?: string;
-  natureza: NaturezaProduto;
-  codigo_servico_municipal: string | null;
-  aliquota_iss: string | null;
   grupo_fiscal_id: number | null;
   grupo_fiscal?: GrupoFiscal | null;
   quantidade_estoque?: number | string;
   estoques?: { loja_id: number; quantidade: number | string; ativo: boolean }[];
 };
+
+// Serviço é entidade própria, separada de Produto (sem estoque/custo).
+export type Servico = {
+  id: number;
+  descricao: string;
+  codigo_servico_municipal: string | null;
+  aliquota_iss: string | null;
+  preco_venda: string;
+  ativo: boolean;
+};
+
+// Usado nos 3 lugares que lidam com carrinho/itens que podem ser produto
+// OU serviço (PDV, Ordem de Serviço nova/detalhe) — evita duplicar a união
+// discriminada em cada tela.
+export type ItemVendavel = { tipo: "produto"; item: Produto } | { tipo: "servico"; item: Servico };
 
 export type GrupoFiscal = {
   id: number;
@@ -68,11 +78,13 @@ export type StatusOrdemServico = "aberta" | "em_execucao" | "concluida" | "cance
 export type OrdemServicoItem = {
   id: number;
   ordem_servico_id: number;
-  produto_id: number;
+  produto_id: number | null;
+  servico_id: number | null;
   quantidade: string | number;
   preco_unitario: string;
   total: string;
   produto?: { id: number; descricao: string } | null;
+  servico?: { id: number; descricao: string } | null;
 };
 
 export type OrdemServico = {
@@ -234,12 +246,14 @@ export type FormaPagamento =
 
 export type VendaItem = {
   id: number;
-  produto_id: number;
+  produto_id: number | null;
+  servico_id: number | null;
   quantidade: string | number;
   preco_original: string;
   preco_unitario: string;
   total: string;
   produto: { descricao: string } | null;
+  servico?: { descricao: string } | null;
 };
 
 export type VendaPagamento = {

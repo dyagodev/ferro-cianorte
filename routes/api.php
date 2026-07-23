@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\RelatorioController;
 use App\Http\Controllers\Api\SpedyWebhookController;
 use App\Http\Controllers\Api\AtivoController;
 use App\Http\Controllers\Api\OrdemServicoController;
+use App\Http\Controllers\Api\ServicoController;
 use App\Http\Controllers\Api\TransferenciaEstoqueController;
 use App\Http\Controllers\Api\VeiculoController;
 use App\Http\Controllers\Api\VendaController;
@@ -109,6 +110,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Ordem de Serviço, que vira Venda de verdade ao faturar (ver
         // OrdemServicoService::faturar()).
         Route::apiResource('ativos', AtivoController::class);
+        Route::apiResource('servicos', ServicoController::class);
         // Sem destroy: OS não se exclui, se cancela (ver cancelar() abaixo)
         // — histórico de acompanhamento deve ficar registrado.
         Route::apiResource('ordens-servico', OrdemServicoController::class)

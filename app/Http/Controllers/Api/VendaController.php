@@ -34,7 +34,7 @@ class VendaController extends Controller
     {
         $user = $request->user();
 
-        $query = Venda::with(['itens.produto', 'pagamentos', 'cliente', 'vendedor', 'loja', 'notasFiscais'])
+        $query = Venda::with(['itens.produto', 'itens.servico', 'pagamentos', 'cliente', 'vendedor', 'loja', 'notasFiscais'])
             ->orderByDesc('created_at');
 
         if (! $user->isAdmin()) {
@@ -110,11 +110,11 @@ class VendaController extends Controller
             return response()->json(['message' => 'Esta venda já está cancelada.'], 422);
         }
 
-        $venda->loadMissing('itens.produto');
+        $venda->loadMissing(['itens.produto', 'itens.servico']);
 
         DB::transaction(function () use ($venda, $request) {
             foreach ($venda->itens as $item) {
-                if (! $item->produto->ehServico()) {
+                if (! $item->ehServico()) {
                     $this->estoque->ajustarDelta(
                         $item->produto,
                         $venda->loja_id,
@@ -142,15 +142,15 @@ class VendaController extends Controller
      */
     public function emitirNota(Venda $venda)
     {
-        $venda->loadMissing(['loja', 'itens.produto', 'notasFiscais']);
+        $venda->loadMissing(['loja', 'itens.produto', 'itens.servico', 'notasFiscais']);
         $loja = $venda->loja;
 
         if ($venda->status === 'cancelada') {
             return response()->json(['message' => 'Venda cancelada não pode emitir nota fiscal.'], 422);
         }
 
-        $temProduto = $venda->itens->contains(fn ($item) => ! $item->produto->ehServico());
-        $temServico = $venda->itens->contains(fn ($item) => $item->produto->ehServico());
+        $temProduto = $venda->itens->contains(fn ($item) => ! $item->ehServico());
+        $temServico = $venda->itens->contains(fn ($item) => $item->ehServico());
 
         $notaProdutoOk = $venda->notasFiscais->firstWhere('tipo', 'nfce')?->autorizada();
         $notaServicoOk = $venda->notasFiscais->firstWhere('tipo', 'nfse')?->autorizada();
@@ -288,9 +288,9 @@ class VendaController extends Controller
             return;
         }
 
-        $venda->loadMissing('itens.produto');
-        $temServico = $venda->itens->contains(fn ($item) => $item->produto->ehServico());
-        $temProduto = $venda->itens->contains(fn ($item) => ! $item->produto->ehServico());
+        $venda->loadMissing(['itens.produto', 'itens.servico']);
+        $temServico = $venda->itens->contains(fn ($item) => $item->ehServico());
+        $temProduto = $venda->itens->contains(fn ($item) => ! $item->ehServico());
 
         if ($temProduto) {
             try {
@@ -343,7 +343,9 @@ class VendaController extends Controller
             'data_hora' => ['nullable', 'date'],
             'desconto' => ['nullable', 'numeric', 'min:0'],
             'itens' => ['required', 'array', 'min:1'],
-            'itens.*.produto_id' => ['required', 'exists:produtos,id'],
+            // Exatamente um dos dois por item — nunca os dois, nunca nenhum.
+            'itens.*.produto_id' => ['required_without:itens.*.servico_id', 'prohibits:itens.*.servico_id', 'nullable', 'exists:produtos,id'],
+            'itens.*.servico_id' => ['required_without:itens.*.produto_id', 'nullable', 'exists:servicos,id'],
             'itens.*.quantidade' => ['required', 'numeric', 'min:0.001'],
             'itens.*.preco_unitario' => ['required', 'numeric', 'min:0'],
             'pagamentos' => ['required', 'array', 'min:1'],

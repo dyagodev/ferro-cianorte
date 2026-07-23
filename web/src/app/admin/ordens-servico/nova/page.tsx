@@ -4,13 +4,18 @@ import { AlertCircle, PawPrint, ScanBarcode, Trash2, Wrench } from "lucide-react
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/apiClient";
-import type { Ativo, Cliente, Loja, OrdemServico, Produto } from "@/lib/types";
+import type { Ativo, Cliente, ItemVendavel, Loja, OrdemServico, Produto, Servico } from "@/lib/types";
 
 type ItemOS = {
-  produto: Produto;
+  chave: string;
+  vendavel: ItemVendavel;
   quantidade: number;
   precoUnitario: number;
 };
+
+function chaveVendavel(vendavel: ItemVendavel): string {
+  return `${vendavel.tipo}-${vendavel.item.id}`;
+}
 
 export default function NovaOrdemServicoPage() {
   const router = useRouter();
@@ -25,7 +30,7 @@ export default function NovaOrdemServicoPage() {
   const [descricaoProblema, setDescricaoProblema] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
-  const [servicosComuns, setServicosComuns] = useState<Produto[]>([]);
+  const [servicosCatalogo, setServicosCatalogo] = useState<Servico[]>([]);
   const [codigoBarras, setCodigoBarras] = useState("");
   const [buscaProduto, setBuscaProduto] = useState("");
   const [produtosEncontrados, setProdutosEncontrados] = useState<Produto[]>([]);
@@ -44,7 +49,7 @@ export default function NovaOrdemServicoPage() {
     apiFetch<Cliente[]>("clientes").then(setClientes);
     // Serviços do catálogo como atalho — clicar já adiciona com o preço
     // cadastrado, em vez de precisar buscar toda vez (ver adicionarItem).
-    apiFetch<Produto[]>("produtos").then((produtos) => setServicosComuns(produtos.filter((p) => p.natureza === "servico")));
+    apiFetch<Servico[]>("servicos").then(setServicosCatalogo);
   }, []);
 
   useEffect(() => {
@@ -68,15 +73,21 @@ export default function NovaOrdemServicoPage() {
     return () => clearTimeout(timer);
   }, [buscaProduto]);
 
-  function adicionarItem(produto: Produto) {
+  // Serviços já vêm carregados por completo (poucos, ao contrário de
+  // produto) — busca client-side pelo mesmo termo, sem round-trip extra.
+  const servicosEncontrados =
+    buscaProduto.trim().length < 2
+      ? []
+      : servicosCatalogo.filter((s) => s.descricao.toLowerCase().includes(buscaProduto.trim().toLowerCase()));
+
+  function adicionarItem(vendavel: ItemVendavel) {
+    const chave = chaveVendavel(vendavel);
     setItens((atual) => {
-      const existente = atual.find((item) => item.produto.id === produto.id);
+      const existente = atual.find((item) => item.chave === chave);
       if (existente) {
-        return atual.map((item) =>
-          item.produto.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item,
-        );
+        return atual.map((item) => (item.chave === chave ? { ...item, quantidade: item.quantidade + 1 } : item));
       }
-      return [...atual, { produto, quantidade: 1, precoUnitario: Number(produto.preco_venda ?? 0) }];
+      return [...atual, { chave, vendavel, quantidade: 1, precoUnitario: Number(vendavel.item.preco_venda ?? 0) }];
     });
     setBuscaProduto("");
     setProdutosEncontrados([]);
@@ -92,9 +103,9 @@ export default function NovaOrdemServicoPage() {
       const encontrados = await apiFetch<Produto[]>(`produtos?q=${encodeURIComponent(codigo)}`);
       const exato = encontrados.find((p) => p.codigo_barras === codigo || p.codigo_interno === codigo);
       if (exato) {
-        adicionarItem(exato);
+        adicionarItem({ tipo: "produto", item: exato });
       } else if (encontrados.length === 1) {
-        adicionarItem(encontrados[0]);
+        adicionarItem({ tipo: "produto", item: encontrados[0] });
       } else {
         window.alert(`Nenhum produto encontrado pro código "${codigo}".`);
       }
@@ -106,14 +117,12 @@ export default function NovaOrdemServicoPage() {
     }
   }
 
-  function removerItem(produtoId: number) {
-    setItens((atual) => atual.filter((item) => item.produto.id !== produtoId));
+  function removerItem(chave: string) {
+    setItens((atual) => atual.filter((item) => item.chave !== chave));
   }
 
-  function atualizarItem(produtoId: number, campo: "quantidade" | "precoUnitario", valor: number) {
-    setItens((atual) =>
-      atual.map((item) => (item.produto.id === produtoId ? { ...item, [campo]: Math.max(0, valor) } : item)),
-    );
+  function atualizarItem(chave: string, campo: "quantidade" | "precoUnitario", valor: number) {
+    setItens((atual) => atual.map((item) => (item.chave === chave ? { ...item, [campo]: Math.max(0, valor) } : item)));
   }
 
   const total = itens.reduce((soma, item) => soma + item.quantidade * item.precoUnitario, 0);
@@ -134,7 +143,8 @@ export default function NovaOrdemServicoPage() {
           descricao_problema: descricaoProblema || null,
           observacoes: observacoes || null,
           itens: itens.map((item) => ({
-            produto_id: item.produto.id,
+            produto_id: item.vendavel.tipo === "produto" ? item.vendavel.item.id : null,
+            servico_id: item.vendavel.tipo === "servico" ? item.vendavel.item.id : null,
             quantidade: item.quantidade,
             preco_unitario: item.precoUnitario,
           })),
@@ -207,31 +217,6 @@ export default function NovaOrdemServicoPage() {
         </div>
       </div>
 
-      {servicosComuns.length > 0 && (
-        <div className="mb-4">
-          <label className="mb-1 block text-sm text-slate-500">Serviços (clique pra adicionar com o preço cadastrado)</label>
-          <div className="flex flex-wrap gap-2">
-            {servicosComuns.map((servico) => {
-              const jaAdicionado = itens.some((item) => item.produto.id === servico.id);
-              return (
-                <button
-                  key={servico.id}
-                  type="button"
-                  onClick={() => adicionarItem(servico)}
-                  className={`rounded-full border px-3 py-1 text-sm ${
-                    jaAdicionado
-                      ? "border-blue-500 bg-blue-600 text-white"
-                      : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {servico.descricao} — R$ {Number(servico.preco_venda).toFixed(2)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="mb-4">
         <label className="mb-1 block text-sm text-slate-500">Descrição do problema (opcional)</label>
         <textarea
@@ -266,18 +251,26 @@ export default function NovaOrdemServicoPage() {
             placeholder="Buscar..."
             className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
           />
-          {produtosEncontrados.length > 0 && (
+          {(produtosEncontrados.length > 0 || servicosEncontrados.length > 0) && (
             <ul className="absolute z-10 mt-1 w-full rounded border border-slate-300 bg-white shadow-lg">
-              {produtosEncontrados.map((p) => (
-                <li key={p.id}>
+              {servicosEncontrados.map((s) => (
+                <li key={`servico-${s.id}`}>
                   <button
-                    onClick={() => adicionarItem(p)}
+                    onClick={() => adicionarItem({ tipo: "servico", item: s })}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                  >
+                    {s.descricao} — R$ {Number(s.preco_venda).toFixed(2)}
+                    <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
+                  </button>
+                </li>
+              ))}
+              {produtosEncontrados.map((p) => (
+                <li key={`produto-${p.id}`}>
+                  <button
+                    onClick={() => adicionarItem({ tipo: "produto", item: p })}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
                   >
                     {p.descricao} — R$ {Number(p.preco_venda).toFixed(2)}
-                    {p.natureza === "servico" && (
-                      <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
-                    )}
                   </button>
                 </li>
               ))}
@@ -306,10 +299,10 @@ export default function NovaOrdemServicoPage() {
               </tr>
             )}
             {itens.map((item) => (
-              <tr key={item.produto.id} className="divide-x divide-slate-200 border-t border-slate-200">
+              <tr key={item.chave} className="divide-x divide-slate-200 border-t border-slate-200">
                 <td className="px-3 py-2">
-                  {item.produto.descricao}
-                  {item.produto.natureza === "servico" && (
+                  {item.vendavel.item.descricao}
+                  {item.vendavel.tipo === "servico" && (
                     <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
                   )}
                 </td>
@@ -318,7 +311,7 @@ export default function NovaOrdemServicoPage() {
                     type="number"
                     step="0.001"
                     value={item.quantidade}
-                    onChange={(e) => atualizarItem(item.produto.id, "quantidade", Number(e.target.value) || 0)}
+                    onChange={(e) => atualizarItem(item.chave, "quantidade", Number(e.target.value) || 0)}
                     className="w-20 rounded border border-slate-300 bg-white px-2 py-1"
                   />
                 </td>
@@ -327,14 +320,14 @@ export default function NovaOrdemServicoPage() {
                     type="number"
                     step="0.01"
                     value={item.precoUnitario}
-                    onChange={(e) => atualizarItem(item.produto.id, "precoUnitario", Number(e.target.value) || 0)}
+                    onChange={(e) => atualizarItem(item.chave, "precoUnitario", Number(e.target.value) || 0)}
                     className="w-24 rounded border border-slate-300 bg-white px-2 py-1"
                   />
                 </td>
                 <td className="px-3 py-2">R$ {(item.quantidade * item.precoUnitario).toFixed(2)}</td>
                 <td className="px-3 py-2">
                   <button
-                    onClick={() => removerItem(item.produto.id)}
+                    onClick={() => removerItem(item.chave)}
                     className="rounded p-1 text-red-500 hover:bg-red-50"
                     title="Remover"
                   >

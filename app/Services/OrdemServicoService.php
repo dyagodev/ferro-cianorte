@@ -14,7 +14,7 @@ use RuntimeException;
  * Ordem de Serviço é só a camada de acompanhamento (diagnóstico, itens
  * usados, execução) ANTES da venda acontecer. Ao faturar (ver faturar()),
  * ela vira uma Venda de verdade via VendaService::registrar() — herda de
- * graça baixa de estoque (produto vs serviço, Produto::ehServico()),
+ * graça baixa de estoque (produto vs serviço, ver VendaItem::ehServico()),
  * emissão fiscal e relatórios já existentes. Não duplica nada disso aqui.
  */
 class OrdemServicoService
@@ -45,7 +45,8 @@ class OrdemServicoService
 
             foreach ($dados['itens'] ?? [] as $item) {
                 $os->itens()->create([
-                    'produto_id' => $item['produto_id'],
+                    'produto_id' => $item['produto_id'] ?? null,
+                    'servico_id' => $item['servico_id'] ?? null,
                     'quantidade' => $item['quantidade'],
                     'preco_unitario' => $item['preco_unitario'],
                     'total' => $item['quantidade'] * $item['preco_unitario'],
@@ -54,7 +55,7 @@ class OrdemServicoService
 
             $this->recalcularTotais($os);
 
-            return $os->fresh(['itens.produto', 'cliente', 'ativo']);
+            return $os->fresh(['itens.produto', 'itens.servico', 'cliente', 'ativo']);
         });
     }
 
@@ -66,7 +67,8 @@ class OrdemServicoService
 
         DB::transaction(function () use ($os, $item) {
             $os->itens()->create([
-                'produto_id' => $item['produto_id'],
+                'produto_id' => $item['produto_id'] ?? null,
+                'servico_id' => $item['servico_id'] ?? null,
                 'quantidade' => $item['quantidade'],
                 'preco_unitario' => $item['preco_unitario'],
                 'total' => $item['quantidade'] * $item['preco_unitario'],
@@ -75,7 +77,7 @@ class OrdemServicoService
             $this->recalcularTotais($os);
         });
 
-        return $os->fresh(['itens.produto']);
+        return $os->fresh(['itens.produto', 'itens.servico']);
     }
 
     public function removerItem(OrdemServico $os, OrdemServicoItem $item): OrdemServico
@@ -89,7 +91,7 @@ class OrdemServicoService
             $this->recalcularTotais($os);
         });
 
-        return $os->fresh(['itens.produto']);
+        return $os->fresh(['itens.produto', 'itens.servico']);
     }
 
     public function mudarStatus(OrdemServico $os, string $novoStatus): OrdemServico
@@ -134,6 +136,7 @@ class OrdemServicoService
                 'desconto' => $os->desconto,
                 'itens' => $os->itens->map(fn (OrdemServicoItem $item) => [
                     'produto_id' => $item->produto_id,
+                    'servico_id' => $item->servico_id,
                     'quantidade' => $item->quantidade,
                     'preco_unitario' => $item->preco_unitario,
                 ])->all(),

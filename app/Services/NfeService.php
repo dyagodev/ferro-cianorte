@@ -465,7 +465,11 @@ class NfeService
         $vPisTotal = 0.0;
         $vCofinsTotal = 0.0;
 
-        foreach ($venda->itens as $indice => $item) {
+        // NF-e (mod 55) de venda só carrega item de mercadoria — serviço vai
+        // numa NFS-e à parte (ver SpedyService::emitirNfse()); sem esse
+        // filtro, um carrinho misto geraria uma linha de produto vazia
+        // (produto null) pro item de serviço.
+        foreach ($venda->itens->filter(fn ($item) => ! $item->ehServico())->values() as $indice => $item) {
             $nItem = $indice + 1;
             $grupo = $item->produto?->grupoFiscal;
             $totalItem = (float) $item->total;

@@ -57,6 +57,7 @@ const MENU: EntradaMenu[] = [
     icone: Wrench,
     itens: [
       { href: "/admin/ordens-servico", rotulo: "Ordens de Serviço", icone: Wrench },
+      { href: "/admin/servicos", rotulo: "Serviços", icone: Wrench },
       { href: "/admin/ativos", rotulo: "Ativos", icone: PawPrint },
     ],
   },

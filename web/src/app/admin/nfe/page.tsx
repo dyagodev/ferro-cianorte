@@ -222,7 +222,6 @@ export default function NfePage() {
           {produtosEncontrados.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full rounded border border-slate-300 bg-white shadow-lg">
               {produtosEncontrados
-                .filter((p) => p.natureza !== "servico")
                 .map((p) => (
                   <li key={p.id}>
                     <button

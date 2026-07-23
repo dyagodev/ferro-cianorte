@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Produto;
+use App\Models\Servico;
 use App\Models\User;
 use App\Models\Venda;
 use Illuminate\Support\Facades\DB;
@@ -56,25 +57,32 @@ class VendaService
                 $venda->save();
             }
 
-            // O preço original vem do cadastro do produto (fonte da verdade), não do
-            // que o cliente mandar, para auditar corretamente alterações de preço no caixa.
-            $produtos = Produto::whereIn('id', collect($data['itens'])->pluck('produto_id'))
-                ->get()
-                ->keyBy('id');
+            // O preço original vem do cadastro (fonte da verdade), não do que
+            // o cliente mandar, pra auditar corretamente alteração de preço
+            // no caixa. Cada item chega com produto_id OU servico_id — nunca
+            // os dois — por isso duas buscas separadas em vez de uma só.
+            $produtoIds = collect($data['itens'])->pluck('produto_id')->filter();
+            $servicoIds = collect($data['itens'])->pluck('servico_id')->filter();
+            $produtos = Produto::whereIn('id', $produtoIds)->get()->keyBy('id');
+            $servicos = Servico::whereIn('id', $servicoIds)->get()->keyBy('id');
 
             foreach ($data['itens'] as $item) {
+                $ehServico = ! empty($item['servico_id']);
+                $catalogo = $ehServico ? $servicos[$item['servico_id']] : $produtos[$item['produto_id']];
+
                 $venda->itens()->create([
-                    'produto_id' => $item['produto_id'],
+                    'produto_id' => $ehServico ? null : $item['produto_id'],
+                    'servico_id' => $ehServico ? $item['servico_id'] : null,
                     'quantidade' => $item['quantidade'],
-                    'preco_original' => $produtos[$item['produto_id']]->preco_venda,
+                    'preco_original' => $catalogo->preco_venda,
                     'preco_unitario' => $item['preco_unitario'],
                     'total' => $item['quantidade'] * $item['preco_unitario'],
                 ]);
 
                 // Serviço não tem estoque físico pra baixar.
-                if (! $produtos[$item['produto_id']]->ehServico()) {
+                if (! $ehServico) {
                     $this->estoque->ajustarDelta(
-                        $produtos[$item['produto_id']],
+                        $catalogo,
                         $lojaId,
                         -$item['quantidade'],
                         'venda',

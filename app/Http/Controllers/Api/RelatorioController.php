@@ -22,7 +22,7 @@ class RelatorioController extends Controller
     {
         [$inicio, $fim] = $this->periodo($request);
 
-        $query = Venda::with(['itens.produto', 'pagamentos', 'cliente', 'vendedor', 'loja', 'notasFiscais'])
+        $query = Venda::with(['itens.produto', 'itens.servico', 'pagamentos', 'cliente', 'vendedor', 'loja', 'notasFiscais'])
             ->whereBetween('created_at', [$inicio, $fim])
             ->whereIn('loja_id', $this->lojaIdsPermitidas($request))
             ->orderByDesc('created_at');

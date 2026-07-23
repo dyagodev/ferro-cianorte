@@ -3,7 +3,7 @@
 import { PackageSearch, PackageX, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
-import type { Produto } from "@/lib/types";
+import type { ItemVendavel, Produto, Servico } from "@/lib/types";
 
 export default function ProdutoModal({
   lojaId,
@@ -12,15 +12,17 @@ export default function ProdutoModal({
 }: {
   lojaId: number | null;
   onFechar: () => void;
-  onSelecionar: (produto: Produto) => void;
+  onSelecionar: (vendavel: ItemVendavel) => void;
 }) {
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<Produto[]>([]);
+  const [servicosCatalogo, setServicosCatalogo] = useState<Servico[]>([]);
   const [carregando, setCarregando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
+    apiFetch<Servico[]>("servicos").then(setServicosCatalogo);
   }, []);
 
   useEffect(() => {
@@ -35,6 +37,14 @@ export default function ProdutoModal({
     }, 250);
     return () => clearTimeout(timer);
   }, [busca, lojaId]);
+
+  // Serviço é catálogo pequeno — filtra client-side pelo mesmo termo em vez
+  // de bater na API a cada tecla (deixa vazio quando busca vazia também
+  // lista todo mundo, igual ao produto).
+  const termoBusca = busca.trim().toLowerCase();
+  const servicosResultados = termoBusca
+    ? servicosCatalogo.filter((s) => s.descricao.toLowerCase().includes(termoBusca))
+    : servicosCatalogo;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60" onKeyDown={(e) => e.key === "Escape" && onFechar()}>
@@ -74,7 +84,7 @@ export default function ProdutoModal({
               </tr>
             </thead>
             <tbody>
-              {resultados.length === 0 && !carregando && (
+              {resultados.length === 0 && servicosResultados.length === 0 && !carregando && (
                 <tr>
                   <td colSpan={4} className="px-3 py-8 text-center text-slate-500">
                     <PackageX className="mx-auto mb-2 h-8 w-8 text-slate-300" />
@@ -82,8 +92,27 @@ export default function ProdutoModal({
                   </td>
                 </tr>
               )}
+              {servicosResultados.map((servico) => (
+                <tr
+                  key={`servico-${servico.id}`}
+                  className="cursor-pointer border-t border-slate-200 hover:bg-slate-100"
+                  onClick={() => onSelecionar({ tipo: "servico", item: servico })}
+                >
+                  <td className="px-3 py-2 text-slate-500">—</td>
+                  <td className="px-3 py-2">
+                    {servico.descricao}
+                    <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-400">—</td>
+                  <td className="px-3 py-2">{Number(servico.preco_venda).toFixed(2)}</td>
+                </tr>
+              ))}
               {resultados.map((produto) => (
-                <tr key={produto.id} className="cursor-pointer border-t border-slate-200 hover:bg-slate-100" onClick={() => onSelecionar(produto)}>
+                <tr
+                  key={`produto-${produto.id}`}
+                  className="cursor-pointer border-t border-slate-200 hover:bg-slate-100"
+                  onClick={() => onSelecionar({ tipo: "produto", item: produto })}
+                >
                   <td className="px-3 py-2 text-slate-500">{produto.codigo_interno ?? produto.id}</td>
                   <td className="px-3 py-2">{produto.descricao}</td>
                   <td className="px-3 py-2">

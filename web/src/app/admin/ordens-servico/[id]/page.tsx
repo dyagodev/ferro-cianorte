@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/apiClient";
 import PagamentoModal from "@/app/pdv/pagamento-modal";
-import type { FormaPagamento, OrdemServico, Produto, StatusOrdemServico } from "@/lib/types";
+import type { FormaPagamento, ItemVendavel, OrdemServico, Produto, Servico, StatusOrdemServico } from "@/lib/types";
 
 function corStatus(status: StatusOrdemServico): string {
   if (status === "faturada") return "bg-emerald-100 text-emerald-700";
@@ -33,6 +33,16 @@ export default function DetalheOrdemServicoPage() {
 
   const [buscaProduto, setBuscaProduto] = useState("");
   const [produtosEncontrados, setProdutosEncontrados] = useState<Produto[]>([]);
+  const [servicosCatalogo, setServicosCatalogo] = useState<Servico[]>([]);
+
+  useEffect(() => {
+    apiFetch<Servico[]>("servicos").then(setServicosCatalogo);
+  }, []);
+
+  const servicosEncontrados =
+    buscaProduto.trim().length < 2
+      ? []
+      : servicosCatalogo.filter((s) => s.descricao.toLowerCase().includes(buscaProduto.trim().toLowerCase()));
 
   async function carregar() {
     try {
@@ -59,16 +69,17 @@ export default function DetalheOrdemServicoPage() {
     return () => clearTimeout(timer);
   }, [buscaProduto]);
 
-  async function adicionarItem(produto: Produto) {
+  async function adicionarItem(vendavel: ItemVendavel) {
     if (!os) return;
     setErro(null);
     try {
       await apiFetch(`ordens-servico/${os.id}/itens`, {
         method: "POST",
         body: JSON.stringify({
-          produto_id: produto.id,
+          produto_id: vendavel.tipo === "produto" ? vendavel.item.id : null,
+          servico_id: vendavel.tipo === "servico" ? vendavel.item.id : null,
           quantidade: 1,
-          preco_unitario: Number(produto.preco_venda ?? 0),
+          preco_unitario: Number(vendavel.item.preco_venda ?? 0),
         }),
       });
       setBuscaProduto("");
@@ -200,18 +211,26 @@ export default function DetalheOrdemServicoPage() {
             placeholder="Buscar..."
             className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
           />
-          {produtosEncontrados.length > 0 && (
+          {(produtosEncontrados.length > 0 || servicosEncontrados.length > 0) && (
             <ul className="absolute z-10 mt-1 w-full rounded border border-slate-300 bg-white shadow-lg">
-              {produtosEncontrados.map((p) => (
-                <li key={p.id}>
+              {servicosEncontrados.map((s) => (
+                <li key={`servico-${s.id}`}>
                   <button
-                    onClick={() => adicionarItem(p)}
+                    onClick={() => adicionarItem({ tipo: "servico", item: s })}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                  >
+                    {s.descricao} — R$ {Number(s.preco_venda).toFixed(2)}
+                    <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
+                  </button>
+                </li>
+              ))}
+              {produtosEncontrados.map((p) => (
+                <li key={`produto-${p.id}`}>
+                  <button
+                    onClick={() => adicionarItem({ tipo: "produto", item: p })}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
                   >
                     {p.descricao} — R$ {Number(p.preco_venda).toFixed(2)}
-                    {p.natureza === "servico" && (
-                      <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
-                    )}
                   </button>
                 </li>
               ))}
@@ -241,7 +260,12 @@ export default function DetalheOrdemServicoPage() {
             )}
             {os.itens?.map((item) => (
               <tr key={item.id} className="divide-x divide-slate-200 border-t border-slate-200">
-                <td className="px-3 py-2">{item.produto?.descricao ?? "—"}</td>
+                <td className="px-3 py-2">
+                  {item.produto?.descricao ?? item.servico?.descricao ?? "—"}
+                  {item.servico_id && (
+                    <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
+                  )}
+                </td>
                 <td className="px-3 py-2">{item.quantidade}</td>
                 <td className="px-3 py-2">R$ {Number(item.preco_unitario).toFixed(2)}</td>
                 <td className="px-3 py-2">R$ {Number(item.total).toFixed(2)}</td>

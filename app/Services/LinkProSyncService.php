@@ -481,7 +481,10 @@ class LinkProSyncService
 
             DB::transaction(function () use ($venda, $conexao, $registro) {
                 foreach ($venda->itens as $item) {
-                    if (! $item->produto->ehServico()) {
+                    // Link Pro não sincroniza serviço, só produto físico —
+                    // guard defensivo mesmo assim (item->produto agora pode
+                    // ser null pra item de serviço, ver VendaItem::ehServico()).
+                    if ($item->produto && ! $item->ehServico()) {
                         $this->estoque->ajustarDelta(
                             $item->produto,
                             $conexao->loja_id,

@@ -351,7 +351,7 @@ export default function DetalheOrdemServicoPage() {
         <PagamentoModal
           total={Number(os.total)}
           clienteNome={os.cliente?.nome ?? "—"}
-          possuiSpedyConfigurado={false}
+          possuiEmissaoFiscalConfigurada={false}
           onFechar={() => setModalPagamentoAberto(false)}
           onConfirmar={async (pagamentos) => faturar(pagamentos)}
         />

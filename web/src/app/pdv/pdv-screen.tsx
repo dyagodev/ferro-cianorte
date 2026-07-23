@@ -43,12 +43,10 @@ export default function PdvScreen({
   role,
   nomeUsuario,
   lojaIdSessao,
-  possuiSpedyConfigurado,
 }: {
   role: "admin" | "vendedor";
   nomeUsuario: string;
   lojaIdSessao: number | null;
-  possuiSpedyConfigurado: boolean;
 }) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
@@ -93,7 +91,14 @@ export default function PdvScreen({
   }, [busca, servicosCatalogo]);
 
   const lojaId = role === "admin" ? lojaSelecionadaId : lojaIdSessao;
-  const lojaNome = lojas.find((loja) => loja.id === lojaId)?.nome ?? "DM Nexus";
+  const lojaAtual = lojas.find((loja) => loja.id === lojaId);
+  const lojaNome = lojaAtual?.nome ?? "DM Nexus";
+  // Config fiscal é por loja (não por empresa/sessão) — o admin pode trocar
+  // de loja no PDV, e cada uma pode estar configurada de forma diferente
+  // (ver Loja::possuiEmissaoFiscalConfigurada). `lojas` já vem sempre fresco
+  // do backend a cada abertura do PDV, então não depende de cookie de login
+  // nem de round-trip extra pra ficar correto.
+  const possuiEmissaoFiscalConfigurada = lojaAtual?.possui_emissao_fiscal_configurada ?? false;
 
   const subtotal = useMemo(
     () => carrinho.reduce((soma, item) => soma + item.quantidade * item.precoVendido, 0),
@@ -612,7 +617,7 @@ export default function PdvScreen({
         <PagamentoModal
           total={total}
           clienteNome={cliente?.nome ?? "não informado"}
-          possuiSpedyConfigurado={possuiSpedyConfigurado}
+          possuiEmissaoFiscalConfigurada={possuiEmissaoFiscalConfigurada}
           onFechar={() => setModalPagamentoAberto(false)}
           onConfirmar={confirmarVenda}
         />

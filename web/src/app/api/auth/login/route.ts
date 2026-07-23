@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { laravelApiUrl } from "@/lib/laravel";
-import { LOJA_COOKIE, NAME_COOKIE, ROLE_COOKIE, SPEDY_COOKIE, TOKEN_COOKIE } from "@/lib/session";
+import { LOJA_COOKIE, NAME_COOKIE, ROLE_COOKIE, TOKEN_COOKIE } from "@/lib/session";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -31,7 +31,6 @@ export async function POST(request: Request) {
   store.set(ROLE_COOKIE, data.user.role, cookieOptions);
   store.set(LOJA_COOKIE, String(data.user.loja_id ?? ""), cookieOptions);
   store.set(NAME_COOKIE, data.user.name, cookieOptions);
-  store.set(SPEDY_COOKIE, data.user.possui_spedy_configurado ? "1" : "0", cookieOptions);
 
   return NextResponse.json({ user: data.user });
 }

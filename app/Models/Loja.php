@@ -62,7 +62,7 @@ class Loja extends Model
 
     protected $appends = [
         'possui_spedy_proprio', 'possui_mdfe_configurado', 'possui_nfce_configurado', 'possui_nfe_configurado',
-        'possui_certificado', 'possui_nfce_csc',
+        'possui_certificado', 'possui_nfce_csc', 'possui_emissao_fiscal_configurada',
     ];
 
     protected function casts(): array
@@ -251,6 +251,25 @@ class Loja extends Model
     public function getPossuiNfceConfiguradoAttribute(): bool
     {
         return $this->possuiNfceConfigurado();
+    }
+
+    /**
+     * Sinal único pro PDV decidir se vale a pena perguntar "emitir nota
+     * fiscal?" no fechamento de caixa — cobre tanto NFC-e direta quanto
+     * Spedy (serviço ainda depende da Spedy pra NFS-e, ver
+     * VendaController::emitirNotaSeConfigurado), sempre desta loja
+     * específica (com fallback pro CNPJ da empresa quando aplicável), nunca
+     * "alguma loja da empresa" — cada loja pode estar configurada de forma
+     * diferente.
+     */
+    public function possuiEmissaoFiscalConfigurada(): bool
+    {
+        return $this->possuiNfceConfigurado() || $this->possuiSpedyConfigurado();
+    }
+
+    public function getPossuiEmissaoFiscalConfiguradaAttribute(): bool
+    {
+        return $this->possuiEmissaoFiscalConfigurada();
     }
 
     /**

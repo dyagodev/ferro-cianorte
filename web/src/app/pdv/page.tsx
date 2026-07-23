@@ -9,7 +9,6 @@ export default async function PdvPage() {
       role={session?.role ?? "vendedor"}
       nomeUsuario={session?.nome ?? ""}
       lojaIdSessao={session?.lojaId ?? null}
-      possuiSpedyConfigurado={session?.possuiSpedyConfigurado ?? false}
     />
   );
 }

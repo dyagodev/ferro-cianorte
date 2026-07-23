@@ -149,6 +149,7 @@ export type Loja = {
   nfe_ambiente: string | null;
   nfe_serie: string | null;
   possui_nfe_configurado: boolean;
+  possui_emissao_fiscal_configurada: boolean;
 };
 
 export type Veiculo = {

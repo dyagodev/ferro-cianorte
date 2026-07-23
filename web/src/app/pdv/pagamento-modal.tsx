@@ -40,13 +40,13 @@ const ICONES_FORMA_PAGAMENTO: Record<FormaPagamento, LucideIcon> = {
 export default function PagamentoModal({
   total,
   clienteNome,
-  possuiSpedyConfigurado,
+  possuiEmissaoFiscalConfigurada,
   onFechar,
   onConfirmar,
 }: {
   total: number;
   clienteNome: string;
-  possuiSpedyConfigurado: boolean;
+  possuiEmissaoFiscalConfigurada: boolean;
   onFechar: () => void;
   onConfirmar: (pagamentos: Pagamento[], emitirNotaFiscal: boolean) => Promise<void>;
 }) {
@@ -231,7 +231,7 @@ export default function PagamentoModal({
           </p>
         )}
 
-        {possuiSpedyConfigurado && (
+        {possuiEmissaoFiscalConfigurada && (
           <div className="mb-4">
             <label className="mb-1 block text-sm text-slate-500">Emitir nota fiscal (NFC-e)?</label>
             <div className="grid grid-cols-2 gap-2">

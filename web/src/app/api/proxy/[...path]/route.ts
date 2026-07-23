@@ -33,6 +33,14 @@ async function forward(request: Request, path: string[]) {
     cache: "no-store",
   });
 
+  // 204 (delete bem-sucedido, ver *Controller::destroy) não pode ter corpo
+  // — o Response constructor do fetch nativo rejeita status sem corpo
+  // (204/205/304) se a gente tentar montar um com JSON.stringify(null)
+  // igual às respostas normais, quebrando toda ação de excluir.
+  if (response.status === 204 || response.status === 205 || response.status === 304) {
+    return new NextResponse(null, { status: response.status });
+  }
+
   const contentType = response.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {

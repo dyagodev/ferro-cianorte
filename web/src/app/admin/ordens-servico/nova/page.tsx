@@ -25,6 +25,7 @@ export default function NovaOrdemServicoPage() {
   const [descricaoProblema, setDescricaoProblema] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
+  const [servicosComuns, setServicosComuns] = useState<Produto[]>([]);
   const [codigoBarras, setCodigoBarras] = useState("");
   const [buscaProduto, setBuscaProduto] = useState("");
   const [produtosEncontrados, setProdutosEncontrados] = useState<Produto[]>([]);
@@ -41,6 +42,9 @@ export default function NovaOrdemServicoPage() {
       setLojaId((atual) => atual ?? dados.find((l) => l.ativo)?.id ?? dados[0]?.id ?? null);
     });
     apiFetch<Cliente[]>("clientes").then(setClientes);
+    // Serviços do catálogo como atalho — clicar já adiciona com o preço
+    // cadastrado, em vez de precisar buscar toda vez (ver adicionarItem).
+    apiFetch<Produto[]>("produtos").then((produtos) => setServicosComuns(produtos.filter((p) => p.natureza === "servico")));
   }, []);
 
   useEffect(() => {
@@ -203,8 +207,33 @@ export default function NovaOrdemServicoPage() {
         </div>
       </div>
 
+      {servicosComuns.length > 0 && (
+        <div className="mb-4">
+          <label className="mb-1 block text-sm text-slate-500">Serviços (clique pra adicionar com o preço cadastrado)</label>
+          <div className="flex flex-wrap gap-2">
+            {servicosComuns.map((servico) => {
+              const jaAdicionado = itens.some((item) => item.produto.id === servico.id);
+              return (
+                <button
+                  key={servico.id}
+                  type="button"
+                  onClick={() => adicionarItem(servico)}
+                  className={`rounded-full border px-3 py-1 text-sm ${
+                    jaAdicionado
+                      ? "border-blue-500 bg-blue-600 text-white"
+                      : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {servico.descricao} — R$ {Number(servico.preco_venda).toFixed(2)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="mb-4">
-        <label className="mb-1 block text-sm text-slate-500">Descrição do problema / solicitação</label>
+        <label className="mb-1 block text-sm text-slate-500">Descrição do problema (opcional)</label>
         <textarea
           value={descricaoProblema}
           onChange={(e) => setDescricaoProblema(e.target.value)}

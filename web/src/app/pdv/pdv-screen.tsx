@@ -667,15 +667,32 @@ export default function PdvScreen({
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                           Autorizada
                         </span>
-                        <a
-                          href={nota.url_danfe ?? `/api/proxy/notas-fiscais/${nota.id}/danfe`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                        >
-                          <Printer className="h-3.5 w-3.5" />
-                          Imprimir DANFE
-                        </a>
+                        {/* Emissão direta gera o PDF aqui (via xml_gerado); emissão pela
+                            Spedy não tem esse XML, só o link hospedado em url_danfe — por
+                            isso os dois links, não um com fallback pro outro (url_danfe de
+                            nota emitida direto é o QR Code de consulta na SEFAZ, não um
+                            DANFE, ver NfceService::extrairUrlConsulta). */}
+                        {(nota.tipo === "nfce" || nota.tipo === "nfe") && (
+                          <a
+                            href={`/api/proxy/notas-fiscais/${nota.id}/danfe`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                            Imprimir DANFE
+                          </a>
+                        )}
+                        {nota.url_danfe && (
+                          <a
+                            href={nota.url_danfe}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Ver nota (SEFAZ)
+                          </a>
+                        )}
                       </span>
                     ) : nota.status === "rejected" || nota.status === "error" ? (
                       <span className="flex items-center gap-1 text-xs text-red-600" title={nota.mensagem_retorno ?? undefined}>

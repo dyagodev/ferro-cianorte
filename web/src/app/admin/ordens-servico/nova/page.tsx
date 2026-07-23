@@ -1,9 +1,10 @@
 "use client";
 
-import { AlertCircle, PawPrint, ScanBarcode, Trash2, Wrench } from "lucide-react";
+import { AlertCircle, PawPrint, Plus, ScanBarcode, Trash2, Wrench } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/apiClient";
+import { ModalCadastro } from "@/components/ModalCadastro";
 import type { Ativo, Cliente, ItemVendavel, Loja, OrdemServico, Produto, Servico } from "@/lib/types";
 
 type ItemOS = {
@@ -27,28 +28,39 @@ export default function NovaOrdemServicoPage() {
   const [ativos, setAtivos] = useState<Ativo[]>([]);
   const [ativoId, setAtivoId] = useState<number | null>(null);
 
+  const [modalClienteAberto, setModalClienteAberto] = useState(false);
+  const [novoClienteNome, setNovoClienteNome] = useState("");
+  const [novoClienteTelefone, setNovoClienteTelefone] = useState("");
+  const [novoClienteCpfCnpj, setNovoClienteCpfCnpj] = useState("");
+  const [salvandoCliente, setSalvandoCliente] = useState(false);
+  const [erroCliente, setErroCliente] = useState<string | null>(null);
+
   const [descricaoProblema, setDescricaoProblema] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
   const [servicosCatalogo, setServicosCatalogo] = useState<Servico[]>([]);
-  const [codigoBarras, setCodigoBarras] = useState("");
-  const [buscaProduto, setBuscaProduto] = useState("");
+  const [busca, setBusca] = useState("");
+  const [buscando, setBuscando] = useState(false);
   const [produtosEncontrados, setProdutosEncontrados] = useState<Produto[]>([]);
   const [itens, setItens] = useState<ItemOS[]>([]);
 
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const inputBarcodeRef = useRef<HTMLInputElement>(null);
+  const buscaRef = useRef<HTMLInputElement>(null);
+
+  async function carregarClientes() {
+    setClientes(await apiFetch<Cliente[]>("clientes"));
+  }
 
   useEffect(() => {
     apiFetch<Loja[]>("lojas").then((dados) => {
       setLojas(dados);
       setLojaId((atual) => atual ?? dados.find((l) => l.ativo)?.id ?? dados[0]?.id ?? null);
     });
-    apiFetch<Cliente[]>("clientes").then(setClientes);
-    // Serviços do catálogo como atalho — clicar já adiciona com o preço
-    // cadastrado, em vez de precisar buscar toda vez (ver adicionarItem).
+    carregarClientes();
+    // Serviço é catálogo pequeno — carrega tudo uma vez e busca client-side
+    // pelo mesmo termo do produto, sem round-trip extra por tecla.
     apiFetch<Servico[]>("servicos").then(setServicosCatalogo);
   }, []);
 
@@ -61,24 +73,24 @@ export default function NovaOrdemServicoPage() {
     apiFetch<Ativo[]>(`ativos?cliente_id=${clienteId}`).then(setAtivos);
   }, [clienteId]);
 
+  // Busca ao vivo (debounced) igual ao PDV — mesmo input serve pro leitor
+  // de código de barras (Enter) e pra digitação normal.
   useEffect(() => {
-    const termo = buscaProduto.trim();
+    const termo = busca.trim();
     if (termo.length < 2) {
       setProdutosEncontrados([]);
       return;
     }
     const timer = setTimeout(() => {
       apiFetch<Produto[]>(`produtos?q=${encodeURIComponent(termo)}`).then(setProdutosEncontrados);
-    }, 300);
+    }, 250);
     return () => clearTimeout(timer);
-  }, [buscaProduto]);
+  }, [busca]);
 
-  // Serviços já vêm carregados por completo (poucos, ao contrário de
-  // produto) — busca client-side pelo mesmo termo, sem round-trip extra.
   const servicosEncontrados =
-    buscaProduto.trim().length < 2
+    busca.trim().length < 2
       ? []
-      : servicosCatalogo.filter((s) => s.descricao.toLowerCase().includes(buscaProduto.trim().toLowerCase()));
+      : servicosCatalogo.filter((s) => s.descricao.toLowerCase().includes(busca.trim().toLowerCase()));
 
   function adicionarItem(vendavel: ItemVendavel) {
     const chave = chaveVendavel(vendavel);
@@ -89,31 +101,38 @@ export default function NovaOrdemServicoPage() {
       }
       return [...atual, { chave, vendavel, quantidade: 1, precoUnitario: Number(vendavel.item.preco_venda ?? 0) }];
     });
-    setBuscaProduto("");
+    setBusca("");
     setProdutosEncontrados([]);
+    buscaRef.current?.focus();
   }
 
-  async function lerCodigoBarras(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    const codigo = codigoBarras.trim();
-    if (!codigo) return;
+  // Enter — mesmo comportamento do PDV: bipe/código exato ou nome único
+  // adiciona direto, mais de um resultado só deixa o dropdown ao vivo aberto.
+  async function buscarItem() {
+    const termo = busca.trim();
+    if (!termo) return;
 
+    setBuscando(true);
     try {
-      const encontrados = await apiFetch<Produto[]>(`produtos?q=${encodeURIComponent(codigo)}`);
-      const exato = encontrados.find((p) => p.codigo_barras === codigo || p.codigo_interno === codigo);
+      const produtos = await apiFetch<Produto[]>(`produtos?q=${encodeURIComponent(termo)}`);
+      const exato = produtos.find((p) => p.codigo_barras === termo || p.codigo_interno === termo);
+      const servicosAtuais = servicosCatalogo.filter((s) => s.descricao.toLowerCase().includes(termo.toLowerCase()));
+
       if (exato) {
         adicionarItem({ tipo: "produto", item: exato });
-      } else if (encontrados.length === 1) {
-        adicionarItem({ tipo: "produto", item: encontrados[0] });
+      } else if (produtos.length + servicosAtuais.length === 1) {
+        if (produtos.length === 1) {
+          adicionarItem({ tipo: "produto", item: produtos[0] });
+        } else {
+          adicionarItem({ tipo: "servico", item: servicosAtuais[0] });
+        }
       } else {
-        window.alert(`Nenhum produto encontrado pro código "${codigo}".`);
+        setProdutosEncontrados(produtos);
       }
     } catch {
-      window.alert("Não foi possível buscar o produto.");
+      setErro("Não foi possível buscar produtos/serviços.");
     } finally {
-      setCodigoBarras("");
-      inputBarcodeRef.current?.focus();
+      setBuscando(false);
     }
   }
 
@@ -126,6 +145,34 @@ export default function NovaOrdemServicoPage() {
   }
 
   const total = itens.reduce((soma, item) => soma + item.quantidade * item.precoUnitario, 0);
+
+  async function salvarNovoCliente(event: React.FormEvent) {
+    event.preventDefault();
+    setErroCliente(null);
+    setSalvandoCliente(true);
+
+    try {
+      const cliente = await apiFetch<Cliente>("clientes", {
+        method: "POST",
+        body: JSON.stringify({
+          nome: novoClienteNome,
+          telefone: novoClienteTelefone || null,
+          cpf_cnpj: novoClienteCpfCnpj || null,
+        }),
+      });
+
+      await carregarClientes();
+      setClienteId(cliente.id);
+      setModalClienteAberto(false);
+      setNovoClienteNome("");
+      setNovoClienteTelefone("");
+      setNovoClienteCpfCnpj("");
+    } catch (e) {
+      setErroCliente(e instanceof ApiError ? e.message : "Não foi possível cadastrar o cliente.");
+    } finally {
+      setSalvandoCliente(false);
+    }
+  }
 
   async function criar() {
     if (!lojaId || !clienteId) return;
@@ -182,18 +229,31 @@ export default function NovaOrdemServicoPage() {
         </div>
         <div>
           <label className="mb-1 block text-sm text-slate-500">Cliente</label>
-          <select
-            value={clienteId ?? ""}
-            onChange={(e) => setClienteId(Number(e.target.value) || null)}
-            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-          >
-            <option value="">Selecione...</option>
-            {clientes.map((cliente) => (
-              <option key={cliente.id} value={cliente.id}>
-                {cliente.nome}
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-1">
+            <select
+              value={clienteId ?? ""}
+              onChange={(e) => setClienteId(Number(e.target.value) || null)}
+              className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            >
+              <option value="">Selecione...</option>
+              {clientes.map((cliente) => (
+                <option key={cliente.id} value={cliente.id}>
+                  {cliente.nome}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setErroCliente(null);
+                setModalClienteAberto(true);
+              }}
+              title="Não achou? Cadastrar cliente novo"
+              className="shrink-0 rounded border border-slate-300 bg-white px-2 text-slate-600 hover:bg-slate-100"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div>
           <label className="mb-1 flex items-center gap-1 text-sm text-slate-500">
@@ -227,56 +287,46 @@ export default function NovaOrdemServicoPage() {
         />
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-3">
-        <div>
-          <label className="mb-1 flex items-center gap-1 text-sm text-slate-500">
-            <ScanBarcode className="h-3.5 w-3.5" />
-            Leitor de código de barras
-          </label>
-          <input
-            ref={inputBarcodeRef}
-            autoFocus
-            value={codigoBarras}
-            onChange={(e) => setCodigoBarras(e.target.value)}
-            onKeyDown={lerCodigoBarras}
-            placeholder="Bipe o produto ou digite o código e Enter"
-            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-          />
-        </div>
-        <div className="relative">
-          <label className="mb-1 block text-sm text-slate-500">Ou buscar produto/serviço</label>
-          <input
-            value={buscaProduto}
-            onChange={(e) => setBuscaProduto(e.target.value)}
-            placeholder="Buscar..."
-            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
-          />
-          {(produtosEncontrados.length > 0 || servicosEncontrados.length > 0) && (
-            <ul className="absolute z-10 mt-1 w-full rounded border border-slate-300 bg-white shadow-lg">
-              {servicosEncontrados.map((s) => (
-                <li key={`servico-${s.id}`}>
-                  <button
-                    onClick={() => adicionarItem({ tipo: "servico", item: s })}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
-                  >
-                    {s.descricao} — R$ {Number(s.preco_venda).toFixed(2)}
-                    <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
-                  </button>
-                </li>
-              ))}
-              {produtosEncontrados.map((p) => (
-                <li key={`produto-${p.id}`}>
-                  <button
-                    onClick={() => adicionarItem({ tipo: "produto", item: p })}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
-                  >
-                    {p.descricao} — R$ {Number(p.preco_venda).toFixed(2)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <div className="relative mb-3">
+        <label className="mb-1 flex items-center gap-1 text-sm text-slate-500">
+          <ScanBarcode className="h-3.5 w-3.5" />
+          Produto ou serviço — bipe o código ou digite pra buscar
+        </label>
+        <input
+          ref={buscaRef}
+          autoFocus
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && buscarItem()}
+          placeholder="Bipe o código de barras ou digite a descrição..."
+          className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+        />
+        {buscando && <p className="mt-1 text-sm text-slate-500">Buscando...</p>}
+        {(produtosEncontrados.length > 0 || servicosEncontrados.length > 0) && (
+          <ul className="absolute z-10 mt-1 w-full rounded border border-slate-300 bg-white shadow-lg">
+            {servicosEncontrados.map((s) => (
+              <li key={`servico-${s.id}`}>
+                <button
+                  onClick={() => adicionarItem({ tipo: "servico", item: s })}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                >
+                  {s.descricao} — R$ {Number(s.preco_venda).toFixed(2)}
+                  <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">serviço</span>
+                </button>
+              </li>
+            ))}
+            {produtosEncontrados.map((p) => (
+              <li key={`produto-${p.id}`}>
+                <button
+                  onClick={() => adicionarItem({ tipo: "produto", item: p })}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                >
+                  {p.descricao} — R$ {Number(p.preco_venda).toFixed(2)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="mb-4 overflow-auto rounded border border-slate-200">
@@ -370,6 +420,70 @@ export default function NovaOrdemServicoPage() {
         <Wrench className="h-4 w-4" />
         {enviando ? "Criando..." : "Abrir Ordem de Serviço"}
       </button>
+
+      {modalClienteAberto && (
+        <ModalCadastro titulo="Novo Cliente" icone={Plus} onFechar={() => setModalClienteAberto(false)}>
+          <form onSubmit={salvarNovoCliente}>
+            <label className="mb-1 block text-sm text-slate-500">Nome</label>
+            <input
+              autoFocus
+              value={novoClienteNome}
+              onChange={(e) => setNovoClienteNome(e.target.value)}
+              required
+              className="mb-3 w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">Telefone (opcional)</label>
+                <input
+                  value={novoClienteTelefone}
+                  onChange={(e) => setNovoClienteTelefone(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-500">CPF/CNPJ (opcional)</label>
+                <input
+                  value={novoClienteCpfCnpj}
+                  onChange={(e) => setNovoClienteCpfCnpj(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <p className="mb-4 text-xs text-slate-400">
+              Endereço completo não é obrigatório aqui — só é necessário se for emitir NF-e pra esse cliente depois
+              (dá pra completar o cadastro em Clientes).
+            </p>
+
+            {erroCliente && (
+              <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                {erroCliente}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setModalClienteAberto(false)}
+                className="rounded border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={salvandoCliente}
+                className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                {salvandoCliente ? "Salvando..." : "Cadastrar"}
+              </button>
+            </div>
+          </form>
+        </ModalCadastro>
+      )}
     </div>
   );
 }

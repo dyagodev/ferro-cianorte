@@ -51,6 +51,7 @@ const MENU: EntradaMenu[] = [
     itens: [
       { href: "/admin/grupos-fiscais", rotulo: "Grupos Fiscais", icone: Receipt },
       { href: "/admin/notas-fiscais", rotulo: "Notas Fiscais", icone: FileCheck2 },
+      { href: "/admin/notas-entrada", rotulo: "Notas de Entrada", icone: Inbox },
     ],
   },
   {
@@ -67,7 +68,6 @@ const MENU: EntradaMenu[] = [
     icone: ArrowRightLeft,
     itens: [
       { href: "/admin/transferencias", rotulo: "Transferências", icone: ArrowRightLeft },
-      { href: "/admin/notas-entrada", rotulo: "Notas de Entrada", icone: Inbox },
       { href: "/admin/manifestos-transporte", rotulo: "MDF-e", icone: Route },
       { href: "/admin/veiculos", rotulo: "Veículos", icone: Car },
       { href: "/admin/condutores", rotulo: "Condutores", icone: IdCard },

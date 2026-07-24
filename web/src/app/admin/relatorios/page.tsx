@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/apiClient";
-import type { FormaPagamento, Loja, MovimentacaoEstoque, NotaFiscal } from "@/lib/types";
+import { FORMAS_PAGAMENTO, type FormaPagamento, type Loja, type MovimentacaoEstoque, type NotaFiscal } from "@/lib/types";
 
 type Aba = "vendas" | "fechamento" | "produtos" | "estoque" | "historico_estoque";
 
@@ -40,13 +40,21 @@ export default function RelatoriosPage() {
   const [lojaId, setLojaId] = useState<string>("");
   const [dataInicio, setDataInicio] = useState(hoje());
   const [dataFim, setDataFim] = useState(hoje());
+  const [formaPagamento, setFormaPagamento] = useState<string>("");
+  const [origem, setOrigem] = useState<string>("");
+  const [possuiIntegracaoLinkPro, setPossuiIntegracaoLinkPro] = useState(false);
 
   useEffect(() => {
     apiFetch<Loja[]>("lojas").then(setLojas);
+    apiFetch<{ possui_integracao_linkpro: boolean }>("relatorios/possui-integracao-linkpro").then((dados) =>
+      setPossuiIntegracaoLinkPro(dados.possui_integracao_linkpro),
+    );
   }, []);
 
   const filtros = new URLSearchParams({ data_inicio: dataInicio, data_fim: dataFim });
   if (lojaId) filtros.set("loja_id", lojaId);
+  if (aba === "vendas" && formaPagamento) filtros.set("forma_pagamento", formaPagamento);
+  if (aba === "vendas" && origem) filtros.set("origem", origem);
 
   const lojaNome = lojaId ? lojas.find((loja) => String(loja.id) === lojaId)?.nome : "Todas as lojas";
   const tituloAba = ABAS.find((item) => item.valor === aba)?.rotulo ?? "";
@@ -125,6 +133,39 @@ export default function RelatoriosPage() {
             ))}
           </select>
         </div>
+        {aba === "vendas" && (
+          <>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Forma de pagamento</label>
+              <select
+                value={formaPagamento}
+                onChange={(e) => setFormaPagamento(e.target.value)}
+                className="rounded border border-slate-300 bg-slate-50 px-2 py-1"
+              >
+                <option value="">Todas</option>
+                {FORMAS_PAGAMENTO.map((opcao) => (
+                  <option key={opcao.valor} value={opcao.valor}>
+                    {opcao.rotulo}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {possuiIntegracaoLinkPro && (
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Origem</label>
+                <select
+                  value={origem}
+                  onChange={(e) => setOrigem(e.target.value)}
+                  className="rounded border border-slate-300 bg-slate-50 px-2 py-1"
+                >
+                  <option value="">Todas</option>
+                  <option value="sistema">Nosso sistema</option>
+                  <option value="linkpro">Link Pro</option>
+                </select>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="relatorio-impressao">

@@ -133,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/ordens-servico/{os}/cancelar', [OrdemServicoController::class, 'cancelar']);
 
         Route::get('/relatorios/vendas', [RelatorioController::class, 'vendas']);
+        Route::get('/relatorios/possui-integracao-linkpro', [RelatorioController::class, 'possuiIntegracaoLinkPro']);
         Route::get('/relatorios/fechamento-caixa', [RelatorioController::class, 'fechamentoCaixa']);
         Route::get('/relatorios/produtos-mais-vendidos', [RelatorioController::class, 'produtosMaisVendidos']);
         Route::get('/relatorios/estoque-baixo', [RelatorioController::class, 'estoqueBaixo']);

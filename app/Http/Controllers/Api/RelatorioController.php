@@ -7,6 +7,7 @@ use App\Models\Loja;
 use App\Models\MovimentacaoCaixa;
 use App\Models\MovimentacaoEstoque;
 use App\Models\Produto;
+use App\Models\SyncConexao;
 use App\Models\Venda;
 use App\Models\VendaItem;
 use App\Models\VendaPagamento;
@@ -26,6 +27,20 @@ class RelatorioController extends Controller
             ->whereBetween('created_at', [$inicio, $fim])
             ->whereIn('loja_id', $this->lojaIdsPermitidas($request))
             ->orderByDesc('created_at');
+
+        if ($formaPagamento = $request->string('forma_pagamento')->toString()) {
+            $query->whereHas('pagamentos', fn ($q) => $q->where('forma_pagamento', $formaPagamento));
+        }
+
+        // sync_conexao_id só é preenchido em venda importada do Link Pro
+        // (ver LinkProSyncService) — nula é venda feita no próprio caixa.
+        if ($origem = $request->string('origem')->toString()) {
+            if ($origem === 'sistema') {
+                $query->whereNull('sync_conexao_id');
+            } elseif ($origem === 'linkpro') {
+                $query->whereNotNull('sync_conexao_id');
+            }
+        }
 
         $vendas = $query->get();
         // Venda cancelada continua listada (auditoria/histórico), mas não
@@ -195,6 +210,18 @@ class RelatorioController extends Controller
         }
 
         return $query->paginate($request->integer('per_page') ?: 30);
+    }
+
+    /**
+     * O filtro "Origem" (nosso sistema x Link Pro) só faz sentido mostrar
+     * na tela se a empresa realmente tem alguma conexão Link Pro
+     * cadastrada — senão é uma opção que nunca muda nada.
+     */
+    public function possuiIntegracaoLinkPro(Request $request)
+    {
+        return response()->json([
+            'possui_integracao_linkpro' => SyncConexao::whereIn('loja_id', $this->lojaIdsPermitidas($request))->exists(),
+        ]);
     }
 
     /**

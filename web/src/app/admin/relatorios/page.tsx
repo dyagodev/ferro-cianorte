@@ -18,7 +18,14 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/apiClient";
-import { FORMAS_PAGAMENTO, type FormaPagamento, type Loja, type MovimentacaoEstoque, type NotaFiscal } from "@/lib/types";
+import {
+  FORMAS_PAGAMENTO,
+  type FormaPagamento,
+  type Loja,
+  type MovimentacaoEstoque,
+  type NotaFiscal,
+  type Produto,
+} from "@/lib/types";
 
 type Aba = "vendas" | "fechamento" | "produtos" | "estoque" | "historico_estoque";
 
@@ -951,25 +958,38 @@ function RelatorioHistoricoEstoque({ query }: { query: string }) {
   const [dados, setDados] = useState<PaginaMovimentacoes | null>(null);
   const [pagina, setPagina] = useState(1);
   const [tipo, setTipo] = useState("");
+  const [produtoSelecionado, setProdutoSelecionado] = useState<Produto | null>(null);
   const [buscaProduto, setBuscaProduto] = useState("");
+  const [resultadosProduto, setResultadosProduto] = useState<Produto[]>([]);
 
   useEffect(() => {
     setPagina(1);
-  }, [query, tipo]);
+  }, [query, tipo, produtoSelecionado]);
 
   useEffect(() => {
     const params = new URLSearchParams(query);
     params.set("page", String(pagina));
     if (tipo) params.set("tipo", tipo);
+    if (produtoSelecionado) params.set("produto_id", String(produtoSelecionado.id));
     apiFetch<PaginaMovimentacoes>(`relatorios/estoque-historico?${params.toString()}`).then(setDados);
-  }, [query, tipo, pagina]);
+  }, [query, tipo, produtoSelecionado, pagina]);
 
-  const linhas = (dados?.data ?? []).filter((mov) =>
-    buscaProduto.trim() === ""
-      ? true
-      : mov.produto?.descricao.toLowerCase().includes(buscaProduto.trim().toLowerCase()) ||
-        mov.produto?.codigo_interno?.toLowerCase().includes(buscaProduto.trim().toLowerCase()),
-  );
+  // Busca de verdade no backend (não só filtro na página carregada) — sem
+  // isso, um produto que só tem movimentação nas páginas seguintes nunca
+  // aparecia, mesmo existindo no histórico completo.
+  useEffect(() => {
+    const termo = buscaProduto.trim();
+    if (termo.length < 2) {
+      setResultadosProduto([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      apiFetch<Produto[]>(`produtos?q=${encodeURIComponent(termo)}`).then(setResultadosProduto);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [buscaProduto]);
+
+  const linhas = dados?.data ?? [];
 
   return (
     <div>
@@ -990,13 +1010,52 @@ function RelatorioHistoricoEstoque({ query }: { query: string }) {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">Filtrar produto (nessa página)</label>
-          <input
-            value={buscaProduto}
-            onChange={(e) => setBuscaProduto(e.target.value)}
-            placeholder="Descrição ou código..."
-            className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm"
-          />
+          <label className="mb-1 block text-xs text-slate-500">Produto</label>
+          {produtoSelecionado ? (
+            <div className="flex items-center gap-1.5 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm">
+              <span>{produtoSelecionado.descricao}</span>
+              <button
+                onClick={() => {
+                  setProdutoSelecionado(null);
+                  setBuscaProduto("");
+                }}
+                className="text-slate-400 hover:text-red-600"
+                aria-label="Limpar filtro de produto"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                value={buscaProduto}
+                onChange={(e) => setBuscaProduto(e.target.value)}
+                placeholder="Descrição ou código..."
+                className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm"
+              />
+              {buscaProduto.trim().length >= 2 && (
+                <div className="absolute left-0 top-full z-10 mt-1 max-h-56 w-64 overflow-auto rounded border border-slate-200 bg-white shadow-lg">
+                  {resultadosProduto.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400">Nenhum produto encontrado.</div>
+                  )}
+                  {resultadosProduto.map((produto) => (
+                    <button
+                      key={produto.id}
+                      onClick={() => {
+                        setProdutoSelecionado(produto);
+                        setBuscaProduto("");
+                        setResultadosProduto([]);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                    >
+                      {produto.descricao}
+                      {produto.codigo_interno && <span className="ml-1 text-xs text-slate-400">({produto.codigo_interno})</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

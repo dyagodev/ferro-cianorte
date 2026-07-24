@@ -35,6 +35,14 @@ use Throwable;
  * produto.qtd_estoque, por outro lado, é mantido pelo próprio Link Pro
  * considerando todos os tipos de movimento — é a fonte de verdade.
  *
+ * IMPORTANTE (2026-07-24): "fonte de verdade" acima é só sobre qual VALOR
+ * ler do Link Pro — não significa mais sobrescrever o estoque local com
+ * esse valor. aplicarReconciliacaoEstoque() aplica a DIFERENÇA entre a
+ * leitura atual e a última que a gente viu (ProdutoEstoque::
+ * ultima_qtd_estoque_linkpro), não o valor absoluto — sobrescrever cego
+ * apagava ajuste manual feito só no DM Nexus na próxima passada (a cada
+ * minuto). Ver o método pra detalhe da regra de bootstrap.
+ *
  * As queries abaixo são as confirmadas contra o schema real do Link Pro
  * (InkDB) em sync-agent/queries/*.sql — ver aquele README pra contexto de
  * cada coluna/join.
@@ -252,28 +260,27 @@ class LinkProSyncService
      * sincronização) — as duas fazem exatamente a mesma coisa hoje, a
      * diferença é só de contexto/nome do tipo de execução gravado.
      */
+    /**
+     * Reconciliação por DELTA, não por valor absoluto — aplica só a
+     * diferença entre o produto.qtd_estoque de agora e o último que a
+     * gente leu (ProdutoEstoque::ultima_qtd_estoque_linkpro), em vez de
+     * sobrescrever o estoque local inteiro. Se o Link Pro não mudou aquele
+     * produto desde o ciclo anterior, o delta é 0 e nada é tocado —
+     * preserva qualquer ajuste feito só no DM Nexus (ajuste manual, venda
+     * nativa) em vez de apagar a cada minuto.
+     *
+     * Produto sem baseline ainda (ultima_qtd_estoque_linkpro null — produto
+     * novo, ou primeira rodada depois desta mudança) só GRAVA o baseline
+     * nesse ciclo, sem aplicar delta nenhum: aplicar `novaQtd - 0` somaria
+     * o valor cheio do Link Pro em cima do que já existe localmente. Custo
+     * aceito: um produto novo leva 1 ciclo (~1min) até o estoque aparecer
+     * certo, em vez de imediato.
+     */
     private function aplicarReconciliacaoEstoque(SyncConexao $conexao, Connection $origem): int
     {
         $registros = $origem->select(self::QUERY_ESTOQUE_COMPLETO);
         $atualizados = 0;
         $produtoIdsEncontrados = [];
-
-        // O Link Pro nunca fica sabendo de venda feita direto no nosso
-        // próprio caixa (venda "nativa", sem sync_conexao_id) — o valor
-        // absoluto de produto.qtd_estoque dele, então, sempre vem mais
-        // alto do que a realidade por exatamente essa quantidade.
-        // Descontamos aqui em vez de sobrescrever cego, senão toda
-        // reconciliação apagaria as vendas feitas por fora do Link Pro.
-        // Venda cancelada já teve o estoque estornado (VendaController::cancelar)
-        // — contar ela aqui também descontaria a mesma quantidade duas vezes.
-        $vendidoNativamentePorProduto = \App\Models\VendaItem::query()
-            ->join('vendas', 'vendas.id', '=', 'venda_itens.venda_id')
-            ->where('vendas.loja_id', $conexao->loja_id)
-            ->whereNull('vendas.sync_conexao_id')
-            ->where('vendas.status', '!=', 'cancelada')
-            ->groupBy('venda_itens.produto_id')
-            ->selectRaw('venda_itens.produto_id, sum(venda_itens.quantidade) as total')
-            ->pluck('total', 'produto_id');
 
         foreach ($registros as $registro) {
             $produtoId = $this->garantirProduto($registro->codigo_interno, (array) $registro);
@@ -285,47 +292,23 @@ class LinkProSyncService
 
             $produtoIdsEncontrados[] = $produtoId;
 
-            $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$produtoId] ?? 0);
-            $quantidadeCorrigida = (float) $registro->quantidade - $vendidoNativamente;
-
-            $this->estoque->definirAbsoluto(
-                Produto::find($produtoId),
-                $conexao->loja_id,
-                $quantidadeCorrigida,
-                'reconciliacao_linkpro',
-                origemTipo: 'sync_conexao',
-                origemId: $conexao->id,
-            );
-
-            $atualizados++;
+            if ($this->aplicarDeltaLinkPro($produtoId, $conexao, (float) $registro->quantidade)) {
+                $atualizados++;
+            }
         }
 
         // Essa leitura é a lista COMPLETA de produtos ativos com estoque
         // nessa loja de origem — qualquer produto que já tinha registro
         // aqui pra essa loja mas não apareceu agora não existe mais lá
-        // (removido/desativado no Link Pro) ou zerou, então zera aqui
-        // também em vez de deixar um valor antigo parado pra sempre (0
-        // do Link Pro menos o que foi vendido nativamente, mesma
-        // correção de cima — senão apagaria venda nativa desse produto).
+        // (removido/desativado no Link Pro), então trata como se o valor
+        // de lá tivesse ido a 0 — mesma regra de delta/bootstrap de cima.
         $faltantes = \App\Models\ProdutoEstoque::where('loja_id', $conexao->loja_id)
             ->whereNotIn('produto_id', $produtoIdsEncontrados)
             ->get();
 
         $zerados = 0;
         foreach ($faltantes as $estoqueFaltante) {
-            $vendidoNativamente = (float) ($vendidoNativamentePorProduto[$estoqueFaltante->produto_id] ?? 0);
-            $quantidadeCorrigida = 0 - $vendidoNativamente;
-
-            if ((float) $estoqueFaltante->quantidade !== $quantidadeCorrigida) {
-                $this->estoque->definirAbsoluto(
-                    $estoqueFaltante->produto,
-                    $conexao->loja_id,
-                    $quantidadeCorrigida,
-                    'reconciliacao_linkpro',
-                    origemTipo: 'sync_conexao',
-                    origemId: $conexao->id,
-                    observacao: 'Produto não encontrado mais na origem (Link Pro) — zerado.',
-                );
+            if ($this->aplicarDeltaLinkPro($estoqueFaltante->produto_id, $conexao, 0, 'Produto não encontrado mais na origem (Link Pro).')) {
                 $zerados++;
             }
         }
@@ -335,6 +318,50 @@ class LinkProSyncService
         }
 
         return $atualizados + $zerados;
+    }
+
+    /**
+     * Aplica a regra de bootstrap/delta descrita em
+     * aplicarReconciliacaoEstoque() pra um produto — devolve true quando
+     * de fato mexeu no estoque (delta != 0), false quando só gravou
+     * baseline ou quando não havia diferença nenhuma (pra não contar isso
+     * como "atualizado" no retorno do método chamador).
+     */
+    private function aplicarDeltaLinkPro(int $produtoId, SyncConexao $conexao, float $novaQtd, ?string $observacao = null): bool
+    {
+        $estoqueAtual = \App\Models\ProdutoEstoque::firstOrNew(['produto_id' => $produtoId, 'loja_id' => $conexao->loja_id]);
+        $ultimaVista = $estoqueAtual->exists ? $estoqueAtual->ultima_qtd_estoque_linkpro : null;
+
+        if ($ultimaVista === null) {
+            $estoqueAtual->produto_id = $produtoId;
+            $estoqueAtual->loja_id = $conexao->loja_id;
+            $estoqueAtual->quantidade ??= 0;
+            $estoqueAtual->ultima_qtd_estoque_linkpro = $novaQtd;
+            $estoqueAtual->save();
+
+            return false;
+        }
+
+        $delta = $novaQtd - (float) $ultimaVista;
+        if ($delta === 0.0) {
+            return false;
+        }
+
+        $this->estoque->ajustarDelta(
+            Produto::find($produtoId),
+            $conexao->loja_id,
+            $delta,
+            'reconciliacao_linkpro',
+            origemTipo: 'sync_conexao',
+            origemId: $conexao->id,
+            observacao: $observacao,
+        );
+
+        \App\Models\ProdutoEstoque::where('produto_id', $produtoId)
+            ->where('loja_id', $conexao->loja_id)
+            ->update(['ultima_qtd_estoque_linkpro' => $novaQtd]);
+
+        return true;
     }
 
     /**
@@ -455,8 +482,13 @@ class LinkProSyncService
 
     /**
      * Propaga cancelamento feito no Link Pro DEPOIS de a venda já ter sido
-     * sincronizada aqui (ver QUERY_CANCELAMENTOS) — mesma ação de
-     * VendaController::cancelar(): estorna item por item e marca status.
+     * sincronizada aqui (ver QUERY_CANCELAMENTOS) — marca o status da venda
+     * como cancelada. NÃO mexe em estoque aqui: o Link Pro já restaurou a
+     * quantidade do lado dele quando a venda foi cancelada, e isso é
+     * capturado pela reconciliação por delta (aplicarReconciliacaoEstoque)
+     * no mesmo ciclo, logo depois — mesmo princípio de sincronizarVendas()
+     * pra venda nova. Aplicar o estorno aqui TAMBÉM duplicaria a
+     * quantidade (uma vez aqui, outra vez no delta da reconciliação).
      * Idempotente (uuid5 determinístico, pula quem já está cancelada aqui
      * ou nunca foi sincronizada — ex.: venda de fora da janela de 14 dias).
      */
@@ -477,29 +509,7 @@ class LinkProSyncService
                 continue;
             }
 
-            $venda->loadMissing('itens.produto');
-
-            DB::transaction(function () use ($venda, $conexao, $registro) {
-                foreach ($venda->itens as $item) {
-                    // Link Pro não sincroniza serviço, só produto físico —
-                    // guard defensivo mesmo assim (item->produto agora pode
-                    // ser null pra item de serviço, ver VendaItem::ehServico()).
-                    if ($item->produto && ! $item->ehServico()) {
-                        $this->estoque->ajustarDelta(
-                            $item->produto,
-                            $conexao->loja_id,
-                            $item->quantidade,
-                            'cancelamento_venda',
-                            origemTipo: 'venda',
-                            origemId: $venda->id,
-                            observacao: 'Cancelada no Link Pro'.($registro->motivo ? ": {$registro->motivo}" : ''),
-                        );
-                    }
-                }
-
-                $venda->update(['status' => 'cancelada']);
-            });
-
+            $venda->update(['status' => 'cancelada']);
             $cancelados++;
         }
 

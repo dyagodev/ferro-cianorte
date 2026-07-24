@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['produto_id', 'loja_id', 'quantidade', 'ativo'])]
+#[Fillable(['produto_id', 'loja_id', 'quantidade', 'ativo', 'ultima_qtd_estoque_linkpro'])]
 class ProdutoEstoque extends Model
 {
     use HasFactory;
@@ -17,6 +17,7 @@ class ProdutoEstoque extends Model
         return [
             'quantidade' => 'decimal:3',
             'ativo' => 'boolean',
+            'ultima_qtd_estoque_linkpro' => 'decimal:3',
         ];
     }
 

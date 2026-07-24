@@ -31,6 +31,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-white text-slate-900">
         <ElectronTitlebar />
+        <UpdateProgressBar />
         {children}
       </body>
     </html>

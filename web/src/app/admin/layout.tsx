@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileCheck2,
   IdCard,
+  Inbox,
   LayoutDashboard,
   Package,
   Tag,
@@ -66,6 +67,7 @@ const MENU: EntradaMenu[] = [
     icone: ArrowRightLeft,
     itens: [
       { href: "/admin/transferencias", rotulo: "Transferências", icone: ArrowRightLeft },
+      { href: "/admin/notas-entrada", rotulo: "Notas de Entrada", icone: Inbox },
       { href: "/admin/manifestos-transporte", rotulo: "MDF-e", icone: Route },
       { href: "/admin/veiculos", rotulo: "Veículos", icone: Car },
       { href: "/admin/condutores", rotulo: "Condutores", icone: IdCard },

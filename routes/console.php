@@ -31,3 +31,12 @@ Schedule::command('sync:reconciliar-estoque')
 Schedule::command('sync:limpar-execucoes')
     ->dailyAt('04:00')
     ->timezone('America/Sao_Paulo');
+
+// Distribuição DFe (notas de fornecedor emitidas contra o CNPJ da loja) —
+// de madrugada, fora do horário de funcionamento, sem custo de rodar 1x/dia
+// (o usuário também pode sincronizar na hora pela tela, ver
+// NotaFiscalTerceiroController::sincronizar()).
+Schedule::command('sync:notas-entrada')
+    ->dailyAt('05:00')
+    ->timezone('America/Sao_Paulo')
+    ->withoutOverlapping(30);

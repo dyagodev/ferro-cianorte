@@ -234,6 +234,43 @@ export type NotaFiscal = {
   mensagem_retorno: string | null;
 };
 
+// Nota emitida por um FORNECEDOR contra o CNPJ da loja (compra) —
+// descoberta via consulta à SEFAZ (Distribuição DFe), diferente de
+// NotaFiscal (o que a gente emite).
+export type NotaFiscalTerceiroItem = {
+  id: number;
+  nota_fiscal_terceiro_id: number;
+  produto_id: number | null;
+  produto?: Produto | null;
+  codigo_produto_fornecedor: string | null;
+  ean: string | null;
+  descricao: string;
+  ncm: string | null;
+  cfop: string | null;
+  unidade: string | null;
+  quantidade: string;
+  valor_unitario: string;
+  valor_total: string;
+};
+
+export type NotaFiscalTerceiro = {
+  id: number;
+  loja_id: number;
+  loja?: { id: number; nome: string };
+  chave_acesso: string;
+  nsu: string;
+  emitente_cnpj: string | null;
+  emitente_nome: string | null;
+  valor_total: string | null;
+  data_emissao: string | null;
+  situacao: "resumo" | "completa";
+  manifestada: boolean;
+  entrada_estoque_em: string | null;
+  entrada_estoque_user_id: number | null;
+  itens?: NotaFiscalTerceiroItem[];
+  itens_count?: number;
+};
+
 export type FormaPagamento =
   | "boleto"
   | "cartao"

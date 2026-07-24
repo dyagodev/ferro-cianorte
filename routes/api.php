@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ManifestoTransporteController;
 use App\Http\Controllers\Api\MunicipioController;
 use App\Http\Controllers\Api\NfeController;
 use App\Http\Controllers\Api\NotaFiscalController;
+use App\Http\Controllers\Api\NotaFiscalTerceiroController;
 use App\Http\Controllers\Api\ProdutoController;
 use App\Http\Controllers\Api\RelatorioController;
 use App\Http\Controllers\Api\SpedyWebhookController;
@@ -88,6 +89,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/notas-fiscais/{notaFiscal}/danfe', [VendaController::class, 'baixarDanfe']);
         Route::get('/notas-fiscais/{notaFiscal}/xml', [VendaController::class, 'baixarXml']);
         Route::post('/notas-fiscais/{notaFiscal}/cancelar', [VendaController::class, 'cancelarNota']);
+
+        // Notas de fornecedor emitidas contra o CNPJ da loja (compra),
+        // descobertas via Distribuição DFe na SEFAZ — ver
+        // DistribuicaoDfeService. Diferente de notas-fiscais acima (que
+        // são as que NÓS emitimos).
+        Route::get('/notas-entrada', [NotaFiscalTerceiroController::class, 'index']);
+        Route::get('/notas-entrada/{notaFiscalTerceiro}', [NotaFiscalTerceiroController::class, 'show']);
+        Route::post('/notas-entrada/sincronizar', [NotaFiscalTerceiroController::class, 'sincronizar']);
+        Route::post('/notas-entrada/{notaFiscalTerceiro}/dar-entrada', [NotaFiscalTerceiroController::class, 'darEntrada']);
 
         // MDF-e — direto na SEFAZ, sem gateway (ver MdfeService).
         Route::apiResource('veiculos', VeiculoController::class);

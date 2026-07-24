@@ -47,6 +47,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/vendas', [VendaController::class, 'store']);
     Route::post('/vendas/sync', [VendaController::class, 'sync']);
     Route::get('/vendas', [VendaController::class, 'index']);
+    // Cancelar é ação de qualquer usuário (não só admin) — vendedor só
+    // pode cancelar venda da própria loja, checado dentro do controller
+    // (ver VendaController::cancelar).
+    Route::post('/vendas/{venda}/cancelar', [VendaController::class, 'cancelar']);
 
     // Abertura, sangria e fechamento de caixa: acessível a admin e
     // vendedor, escopado à loja de cada um (admin informa a loja, vendedor
@@ -77,7 +81,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('funcionarios', FuncionarioController::class);
         Route::apiResource('entregadores', EntregadorController::class);
 
-        Route::post('/vendas/{venda}/cancelar', [VendaController::class, 'cancelar']);
         Route::post('/vendas/{venda}/emitir-nota', [VendaController::class, 'emitirNota']);
 
         // Consulta consolidada — todas as notas emitidas, filtrável por

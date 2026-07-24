@@ -378,6 +378,7 @@ export type MovimentacaoEstoque = {
   loja?: { id: number; nome: string };
   quantidade_antes: string;
   quantidade_depois: string;
+  estoque_atual: string | null;
   delta: number;
   tipo: TipoMovimentacaoEstoque;
   origem_tipo: string | null;

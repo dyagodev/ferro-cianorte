@@ -18,13 +18,44 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Relatórios administrativos: garante fundo branco/texto preto ao imprimir. */
+/* Relatórios administrativos: folha de impressão de verdade — tabela com
+   borda em toda célula e listra (cinza claro/branco) nas linhas, em vez de
+   só forçar tudo preto-no-branco sem estrutura visual (o que deixava as
+   colunas com aparência confusa, sem separação nenhuma). O
+   print-color-adjust é necessário pros navegadores não descartarem a cor de
+   fundo (listra, badges de status) na hora de imprimir, que é o padrão. */
 @media print {
-  .relatorio-impressao,
-  .relatorio-impressao * {
-    background: white !important;
-    color: black !important;
-    border-color: #999 !important;
+  .relatorio-impressao {
+    color: #111827;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .relatorio-impressao table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .relatorio-impressao th,
+  .relatorio-impressao td {
+    border: 1px solid #cbd5e1;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .relatorio-impressao thead th {
+    background: #e2e8f0 !important;
+    color: #111827 !important;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .relatorio-impressao tbody tr:nth-child(even) td {
+    background: #f8fafc !important;
+  }
+
+  .relatorio-impressao tbody tr:nth-child(odd) td {
+    background: #ffffff !important;
   }
 }
 

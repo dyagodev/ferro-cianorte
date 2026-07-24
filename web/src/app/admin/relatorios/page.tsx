@@ -1068,7 +1068,7 @@ function RelatorioHistoricoEstoque({ query }: { query: string }) {
               <th className="px-3 py-2">Loja</th>
               <th className="px-3 py-2">Tipo</th>
               <th className="px-3 py-2">Antes</th>
-              <th className="px-3 py-2">Depois</th>
+              <th className="px-3 py-2">Estoque Real</th>
               <th className="px-3 py-2">Variação</th>
               <th className="px-3 py-2">Quem</th>
               <th className="px-3 py-2">Observação</th>
@@ -1105,7 +1105,9 @@ function RelatorioHistoricoEstoque({ query }: { query: string }) {
                   </span>
                 </td>
                 <td className="px-3 py-2">{Number(mov.quantidade_antes).toFixed(3)}</td>
-                <td className="px-3 py-2">{Number(mov.quantidade_depois).toFixed(3)}</td>
+                <td className="px-3 py-2 font-medium">
+                  {mov.estoque_atual !== null ? Number(mov.estoque_atual).toFixed(3) : "—"}
+                </td>
                 <td className={`px-3 py-2 font-medium ${mov.delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                   {mov.delta >= 0 ? "+" : ""}
                   {mov.delta.toFixed(3)}

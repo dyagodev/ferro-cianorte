@@ -396,7 +396,14 @@ export default function PdvScreen({
                     className="flex w-full items-center justify-between px-4 py-2 text-left text-slate-900 hover:bg-slate-100"
                   >
                     <span>{produto.descricao}</span>
-                    <span className="text-slate-500">R$ {Number(produto.preco_venda).toFixed(2)}</span>
+                    <span className="flex items-center gap-3">
+                      {produto.quantidade_estoque !== undefined && (
+                        <span className={Number(produto.quantidade_estoque) <= 0 ? "text-red-600" : "text-slate-400"}>
+                          estoque: {Number(produto.quantidade_estoque)}
+                        </span>
+                      )}
+                      <span className="text-slate-500">R$ {Number(produto.preco_venda).toFixed(2)}</span>
+                    </span>
                   </button>
                 </li>
               ))}

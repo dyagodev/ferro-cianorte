@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Unlock,
   X,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -545,27 +546,57 @@ function VendasLista({
   const [dados, setDados] = useState<PaginaVendas | null>(null);
   const [pagina, setPagina] = useState(1);
   const [erro, setErro] = useState(false);
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+
+  useEffect(() => {
+    setPagina(1);
+  }, [dataInicio, dataFim]);
 
   useEffect(() => {
     if (vendaSelecionada) return;
 
     const query = new URLSearchParams({ page: String(pagina) });
     if (lojaId) query.set("loja_id", String(lojaId));
+    if (dataInicio) query.set("data_inicio", dataInicio);
+    if (dataFim) query.set("data_fim", dataFim);
 
     apiFetch<PaginaVendas>(`vendas?${query.toString()}`)
       .then(setDados)
       .catch(() => setErro(true));
-  }, [lojaId, pagina, vendaSelecionada]);
+  }, [lojaId, pagina, dataInicio, dataFim, vendaSelecionada]);
 
   if (vendaSelecionada) {
     return <VendaDetalhe venda={vendaSelecionada} role={role} onAtualizar={onSelecionar} />;
   }
 
-  if (erro) return <p className="text-red-600">Não foi possível carregar as vendas.</p>;
-  if (!dados) return <p className="text-slate-500">Carregando...</p>;
-
   return (
     <div>
+      <div className="mb-3 flex flex-wrap gap-3">
+        <div>
+          <label className="mb-1 block text-xs text-slate-500">De</label>
+          <input
+            type="date"
+            value={dataInicio}
+            onChange={(e) => setDataInicio(e.target.value)}
+            className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-500">Até</label>
+          <input
+            type="date"
+            value={dataFim}
+            onChange={(e) => setDataFim(e.target.value)}
+            className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-sm"
+          />
+        </div>
+      </div>
+
+      {erro && <p className="text-red-600">Não foi possível carregar as vendas.</p>}
+      {!erro && !dados && <p className="text-slate-500">Carregando...</p>}
+      {!erro && dados && (
+      <>
       <div className="max-h-96 overflow-auto rounded border border-slate-200">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-500">
@@ -634,6 +665,8 @@ function VendasLista({
           </button>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -693,6 +726,8 @@ function VendaDetalhe({
   const [erroEmissao, setErroEmissao] = useState<string | null>(null);
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
   const [erroCancelamento, setErroCancelamento] = useState<string | null>(null);
+  const [cancelandoVenda, setCancelandoVenda] = useState(false);
+  const [erroCancelamentoVenda, setErroCancelamentoVenda] = useState<string | null>(null);
 
   async function cancelarNota(nota: NonNullable<Venda["notas_fiscais"]>[number]) {
     const justificativa = window.prompt(
@@ -721,6 +756,24 @@ function VendaDetalhe({
       setErroCancelamento(e instanceof ApiError ? e.message : "Não foi possível cancelar a nota fiscal.");
     } finally {
       setCancelandoId(null);
+    }
+  }
+
+  async function cancelarVenda() {
+    const aviso = jaAutorizada
+      ? "Essa venda já tem nota fiscal autorizada — cancelar a venda NÃO cancela a nota automaticamente. Confirma o cancelamento da venda mesmo assim?"
+      : "Confirma o cancelamento dessa venda? O estoque dos itens será devolvido. Essa ação não pode ser desfeita.";
+    if (!window.confirm(aviso)) return;
+
+    setCancelandoVenda(true);
+    setErroCancelamentoVenda(null);
+    try {
+      const atualizada = await apiFetch<Venda>(`vendas/${venda.id}/cancelar`, { method: "POST" });
+      onAtualizar({ ...venda, ...atualizada });
+    } catch (e) {
+      setErroCancelamentoVenda(e instanceof ApiError ? e.message : "Não foi possível cancelar a venda.");
+    } finally {
+      setCancelandoVenda(false);
     }
   }
 
@@ -753,6 +806,16 @@ function VendaDetalhe({
             {emitindo ? "Emitindo..." : "Emitir nota fiscal"}
           </button>
         )}
+        {!cancelada && (
+          <button
+            onClick={cancelarVenda}
+            disabled={cancelandoVenda}
+            className="flex items-center gap-1.5 rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            <XCircle className="h-4 w-4" />
+            {cancelandoVenda ? "Cancelando..." : "Cancelar venda"}
+          </button>
+        )}
         <button
           onClick={() => imprimir()}
           className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
@@ -761,6 +824,13 @@ function VendaDetalhe({
           Imprimir
         </button>
       </div>
+
+      {erroCancelamentoVenda && (
+        <p className="mb-4 flex items-center gap-1.5 text-sm text-red-600 print:hidden">
+          <AlertCircle className="h-4 w-4" />
+          {erroCancelamentoVenda}
+        </p>
+      )}
 
       {role === "admin" && (notas.length > 0 || erroEmissao) && (
         <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm print:hidden">

@@ -13,6 +13,7 @@ use App\Services\SpedyService;
 use App\Services\VendaService;
 use App\Support\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -52,7 +53,31 @@ class VendaController extends Controller
             $query->whereIn('loja_id', $lojasQuery->pluck('id'));
         }
 
+        if ($request->filled('data_inicio') || $request->filled('data_fim')) {
+            [$inicio, $fim] = $this->periodo($request);
+            $query->whereBetween('created_at', [$inicio, $fim]);
+        }
+
         return $query->paginate(30);
+    }
+
+    /**
+     * Mesmo cuidado de RelatorioController::periodo() — "De"/"Até" na tela
+     * são sempre dia civil de Brasília; sem informar o timezone de origem
+     * aqui, Carbon::parse assume UTC (timezone padrão da aplicação) e
+     * perde/ganha venda perto da meia-noite.
+     */
+    private function periodo(Request $request): array
+    {
+        $inicio = $request->filled('data_inicio')
+            ? Carbon::parse($request->string('data_inicio'), 'America/Sao_Paulo')->startOfDay()
+            : Carbon::now('America/Sao_Paulo')->startOfDay();
+
+        $fim = $request->filled('data_fim')
+            ? Carbon::parse($request->string('data_fim'), 'America/Sao_Paulo')->endOfDay()
+            : Carbon::now('America/Sao_Paulo')->endOfDay();
+
+        return [$inicio, $fim];
     }
 
     public function store(Request $request)
@@ -106,6 +131,15 @@ class VendaController extends Controller
      */
     public function cancelar(Request $request, Venda $venda)
     {
+        // Cancelar venda agora é uma ação de qualquer usuário (não só
+        // admin, ver routes/api.php), mas vendedor só pode cancelar venda
+        // da PRÓPRIA loja — sem essa checagem, ele poderia cancelar
+        // qualquer venda da empresa só sabendo o id (EmpresaScope garante
+        // isolamento entre empresas, não entre lojas da mesma empresa).
+        if (! $request->user()->isAdmin() && $venda->loja_id !== $request->user()->loja_id) {
+            return response()->json(['message' => 'Você só pode cancelar vendas da sua própria loja.'], 403);
+        }
+
         if ($venda->status === 'cancelada') {
             return response()->json(['message' => 'Esta venda já está cancelada.'], 422);
         }

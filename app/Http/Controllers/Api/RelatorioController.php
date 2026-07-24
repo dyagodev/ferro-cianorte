@@ -7,6 +7,7 @@ use App\Models\Loja;
 use App\Models\MovimentacaoCaixa;
 use App\Models\MovimentacaoEstoque;
 use App\Models\Produto;
+use App\Models\ProdutoEstoque;
 use App\Models\SyncConexao;
 use App\Models\Venda;
 use App\Models\VendaItem;
@@ -209,7 +210,34 @@ class RelatorioController extends Controller
             $query->whereBetween('created_at', [$inicio, $fim]);
         }
 
-        return $query->paginate($request->integer('per_page') ?: 30);
+        $pagina = $query->paginate($request->integer('per_page') ?: 30);
+
+        // "Estoque real" é o valor ATUAL de produto_estoques, não o
+        // quantidade_depois gravado naquela linha (que só reflete o estado
+        // logo após aquele movimento específico — pode já ter mudado desde
+        // então). Busca em lote pra não fazer 1 query por linha da página.
+        $pares = $pagina->getCollection()
+            ->map(fn (MovimentacaoEstoque $mov) => ['produto_id' => $mov->produto_id, 'loja_id' => $mov->loja_id])
+            ->unique(fn ($par) => "{$par['produto_id']}:{$par['loja_id']}");
+
+        $estoquesAtuais = $pares->isEmpty()
+            ? collect()
+            : ProdutoEstoque::query()
+                ->where(function ($query) use ($pares) {
+                    foreach ($pares as $par) {
+                        $query->orWhere(function ($q) use ($par) {
+                            $q->where('produto_id', $par['produto_id'])->where('loja_id', $par['loja_id']);
+                        });
+                    }
+                })
+                ->get()
+                ->keyBy(fn (ProdutoEstoque $estoque) => "{$estoque->produto_id}:{$estoque->loja_id}");
+
+        $pagina->getCollection()->each(function (MovimentacaoEstoque $mov) use ($estoquesAtuais) {
+            $mov->estoque_atual = $estoquesAtuais->get("{$mov->produto_id}:{$mov->loja_id}")?->quantidade;
+        });
+
+        return $pagina;
     }
 
     /**
